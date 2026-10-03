@@ -1,0 +1,7 @@
+node_modules/
+# build/ (commented out to prevent artifact upload from ignoring build artifacts)
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
