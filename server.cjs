@@ -10927,7 +10927,7 @@ var import_dotenv = __toESM(require("dotenv"), 1);
 // server/routes/authRoutes.ts
 var import_express = require("express");
 var import_bcryptjs2 = __toESM(require("bcryptjs"), 1);
-var import_crypto2 = __toESM(require("crypto"), 1);
+var import_crypto3 = __toESM(require("crypto"), 1);
 var import_fs3 = __toESM(require("fs"), 1);
 var import_path3 = __toESM(require("path"), 1);
 var import_axios = __toESM(require("axios"), 1);
@@ -10938,6 +10938,7 @@ init_pg();
 var import_fs2 = __toESM(require("fs"), 1);
 var import_path2 = __toESM(require("path"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_crypto2 = __toESM(require("crypto"), 1);
 init_db();
 var jwtSecretCache = null;
 function getJwtSecret() {
@@ -10949,6 +10950,9 @@ function getJwtSecret() {
     jwtSecretCache = envSecret;
     return jwtSecretCache;
   }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("FATAL: JWT_SECRET environment variable is missing or too short in production. A strong secret of at least 32 characters is required.");
+  }
   try {
     const secretFilePath = import_path2.default.join(process.cwd(), ".jwt_secret");
     if (import_fs2.default.existsSync(secretFilePath)) {
@@ -10958,12 +10962,12 @@ function getJwtSecret() {
         return jwtSecretCache;
       }
     }
-    const newSecret = "9eef18c5_stable_session_secret_key_2026_production_cc";
-    import_fs2.default.writeFileSync(secretFilePath, newSecret, "utf8");
-    jwtSecretCache = newSecret;
+    const runtimeDevSecret = import_crypto2.default.randomBytes(32).toString("hex");
+    import_fs2.default.writeFileSync(secretFilePath, runtimeDevSecret, "utf8");
+    jwtSecretCache = runtimeDevSecret;
     return jwtSecretCache;
-  } catch (fsErr) {
-    jwtSecretCache = "9eef18c5_stable_session_secret_key_2026_production_cc";
+  } catch {
+    jwtSecretCache = import_crypto2.default.randomBytes(32).toString("hex");
     return jwtSecretCache;
   }
 }
@@ -11496,13 +11500,8 @@ async function requireAdmin(req, res, next) {
     });
     return;
   }
-  const validMasterKeys = [
-    process.env.ADMIN_SECRET_KEY,
-    "admin_secure_key_9876543210_abcdef",
-    "RAHMANJMCC",
-    "admin123456"
-  ].filter(Boolean).map((k) => k.trim());
-  if (validMasterKeys.includes(token)) {
+  const configuredAdminKey = process.env.ADMIN_SECRET_KEY?.trim();
+  if (configuredAdminKey && configuredAdminKey.length > 0 && token === configuredAdminKey) {
     req.admin = {
       id: "MASTER",
       name: "Master Admin",
@@ -11788,8 +11787,8 @@ router.post("/login", authRateLimiter, async (req, res) => {
       if (user.passwordHash.startsWith("$2a$") || user.passwordHash.startsWith("$2b$") || user.passwordHash.startsWith("$2y$")) {
         isPasswordValid = import_bcryptjs2.default.compareSync(normalizedPassword, user.passwordHash) || import_bcryptjs2.default.compareSync(password, user.passwordHash);
       } else {
-        const sha256 = import_crypto2.default.createHash("sha256").update(normalizedPassword).digest("hex");
-        const rawSha256 = import_crypto2.default.createHash("sha256").update(password).digest("hex");
+        const sha256 = import_crypto3.default.createHash("sha256").update(normalizedPassword).digest("hex");
+        const rawSha256 = import_crypto3.default.createHash("sha256").update(password).digest("hex");
         if (user.passwordHash === sha256 || user.passwordHash === rawSha256 || user.passwordHash === normalizedPassword || user.passwordHash === password) {
           isPasswordValid = true;
           const newHash = import_bcryptjs2.default.hashSync(normalizedPassword, 10);
@@ -12122,7 +12121,7 @@ router.post("/register-request", otpRequestRateLimiter, async (req, res) => {
       }
     }
     const passwordHash = import_bcryptjs2.default.hashSync(normalizedPassword, 10);
-    const otpCode = import_crypto2.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto3.default.randomInt(1e5, 1e6).toString();
     await db.saveOtp(cleanPhone, otpCode, "REGISTRATION_VERIFICATION", 10, {
       fullName: fullName.trim(),
       phone: normPhone,
@@ -12254,7 +12253,7 @@ router.post("/forgot-password-request", otpRequestRateLimiter, async (req, res) 
     }
     const clean = identifier.trim();
     const user = await db.getUserByIdentifier(clean);
-    const otpCode = import_crypto2.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto3.default.randomInt(1e5, 1e6).toString();
     if (user) {
       await db.saveOtp(user.phone, otpCode, "PASSWORD_RESET", 10);
       if (user.email) {
@@ -12352,7 +12351,7 @@ router.post("/request-otp", otpRequestRateLimiter, async (req, res) => {
     }
     const cleanPhone = String(phone).trim().replace(/[\s-]/g, "");
     const existingUser = await db.getUserByPhone(cleanPhone);
-    const otpCode = import_crypto2.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto3.default.randomInt(1e5, 1e6).toString();
     if (existingUser && existingUser.passwordHash) {
       res.json({
         success: true,
@@ -12366,7 +12365,7 @@ router.post("/request-otp", otpRequestRateLimiter, async (req, res) => {
       fullName: fullName || (existingUser ? existingUser.fullName : "\u09AE\u09C1\u09B8\u09BE\u09B2\u09CD\u09B2\u09C0"),
       phone: cleanPhone,
       gender: existingUser ? existingUser.gender : "male",
-      passwordHash: existingUser?.passwordHash || import_bcryptjs2.default.hashSync(import_crypto2.default.randomBytes(16).toString("hex"), 10)
+      passwordHash: existingUser?.passwordHash || import_bcryptjs2.default.hashSync(import_crypto3.default.randomBytes(16).toString("hex"), 10)
     });
     console.log(`[AUTH] Legacy OTP for ${cleanPhone}: ${otpCode}`);
     res.json({
@@ -12399,7 +12398,7 @@ router.post("/verify-otp", authRateLimiter, async (req, res) => {
       user = await db.createUser({
         fullName: fullName || verification.registrationData?.fullName || "\u09AE\u09C1\u09B8\u09BE\u09B2\u09CD\u09B2\u09C0",
         phone: cleanPhone,
-        passwordHash: verification.registrationData?.passwordHash || import_bcryptjs2.default.hashSync(import_crypto2.default.randomBytes(16).toString("hex"), 10),
+        passwordHash: verification.registrationData?.passwordHash || import_bcryptjs2.default.hashSync(import_crypto3.default.randomBytes(16).toString("hex"), 10),
         gender: "male"
       });
     } else {
@@ -15273,7 +15272,7 @@ var prayerRoutes_default = router2;
 
 // server/routes/mosqueRoutes.ts
 var import_express3 = require("express");
-var import_crypto3 = __toESM(require("crypto"), 1);
+var import_crypto4 = __toESM(require("crypto"), 1);
 var import_path4 = __toESM(require("path"), 1);
 var import_fs4 = __toESM(require("fs"), 1);
 init_db();
@@ -15343,7 +15342,7 @@ router3.post("/upload-photo", async (req, res) => {
       res.status(400).json({ success: false, message: "\u099B\u09AC\u09BF\u09B0 \u09B8\u09BE\u0987\u099C \u09B8\u09B0\u09CD\u09AC\u09CB\u099A\u09CD\u099A \u09E7\u09E6 \u09AE\u09C7\u0997\u09BE\u09AC\u09BE\u0987\u099F \u09B9\u09A4\u09C7 \u09AA\u09BE\u09B0\u09AC\u09C7\u0964" });
       return;
     }
-    const mediaId = `media_${Date.now()}_${import_crypto3.default.randomBytes(6).toString("hex")}`;
+    const mediaId = `media_${Date.now()}_${import_crypto4.default.randomBytes(6).toString("hex")}`;
     const cleanFilename = filename ? import_path4.default.basename(filename) : `${mediaId}.jpg`;
     await db.saveUploadedMedia({
       id: mediaId,
@@ -16479,7 +16478,7 @@ shopRoutes.delete("/products/:productId/reviews/:reviewId", requireAuth, async (
 var import_express6 = require("express");
 var import_path6 = __toESM(require("path"), 1);
 var import_fs6 = __toESM(require("fs"), 1);
-var import_crypto5 = __toESM(require("crypto"), 1);
+var import_crypto6 = __toESM(require("crypto"), 1);
 init_db();
 init_timezone();
 
@@ -16587,10 +16586,10 @@ var smsService = new SmsServiceManager();
 
 // server/services/pdfVerificationService.ts
 init_pg();
-var import_crypto4 = __toESM(require("crypto"), 1);
+var import_crypto5 = __toESM(require("crypto"), 1);
 var PDFVerificationService = {
   async createVerification(reportType, shopName, recordCount, totalAmount, metadata = {}) {
-    const id = "VRF-" + import_crypto4.default.randomBytes(16).toString("hex").toUpperCase();
+    const id = "VRF-" + import_crypto5.default.randomBytes(16).toString("hex").toUpperCase();
     await pool.query(
       `INSERT INTO pdf_verifications (id, report_type, shop_name, record_count, total_amount, metadata)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -17520,7 +17519,7 @@ merchantRoutes.post("/request-otp", authRateLimiter, async (req, res) => {
       res.status(400).json({ success: false, message: "\u098F\u0987 \u09AE\u09CB\u09AC\u09BE\u0987\u09B2 \u09A8\u09AE\u09CD\u09AC\u09B0 \u09A6\u09BF\u09DF\u09C7 \u0987\u09A4\u09CB\u09AE\u09A7\u09CD\u09AF\u09C7 \u098F\u0995\u099F\u09BF \u09AE\u09BE\u09B0\u09CD\u099A\u09C7\u09A8\u09CD\u099F \u0985\u09CD\u09AF\u09BE\u0995\u09BE\u0989\u09A8\u09CD\u099F \u09B0\u09DF\u09C7\u099B\u09C7\u0964" });
       return;
     }
-    const otpCode = import_crypto5.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto6.default.randomInt(1e5, 1e6).toString();
     await db.saveOtp(cleanPhone, otpCode, "MERCHANT_REGISTRATION", 10);
     await smsService.sendOtp(cleanPhone, otpCode, "Merchant Registration");
     const isDev = process.env.NODE_ENV !== "production";
@@ -17621,7 +17620,7 @@ merchantRoutes.post("/upload-document", async (req, res) => {
       return;
     }
     const docPrefix = documentType || "doc";
-    const randomSuffix = import_crypto5.default.randomBytes(6).toString("hex");
+    const randomSuffix = import_crypto6.default.randomBytes(6).toString("hex");
     const uniqueName = `${docPrefix}_${Date.now()}_${randomSuffix}.${ext}`;
     const filePath = import_path6.default.join(UPLOAD_DIR, uniqueName);
     import_fs6.default.writeFileSync(filePath, buffer);
@@ -17944,7 +17943,7 @@ merchantRoutes.post("/password-reset/request", otpRequestRateLimiter, async (req
     }
     const cleanPhone = normalizePhoneNumber(rawInput.trim());
     const merchant = await db.getMerchantByPhone(cleanPhone);
-    const otpCode = import_crypto5.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto6.default.randomInt(1e5, 1e6).toString();
     let isValidMerchant = false;
     const isDev = process.env.NODE_ENV !== "production";
     if (merchant) {
@@ -18781,7 +18780,7 @@ merchantRoutes.post("/products/upload-image", requireMerchantAuth, async (req, r
       res.status(400).json({ success: false, message: "\u099B\u09AC\u09BF\u09B0 \u09B8\u09BE\u0987\u099C \u09B8\u09B0\u09CD\u09AC\u09CB\u099A\u09CD\u099A \u09EB \u09AE\u09C7\u0997\u09BE\u09AC\u09BE\u0987\u099F \u09B9\u09A4\u09C7 \u09AA\u09BE\u09B0\u09AC\u09C7\u0964" });
       return;
     }
-    const uniqueId = `prod_${Date.now()}_${import_crypto5.default.randomBytes(6).toString("hex")}.${ext}`;
+    const uniqueId = `prod_${Date.now()}_${import_crypto6.default.randomBytes(6).toString("hex")}.${ext}`;
     const safeFileName = fileName || uniqueId;
     const saved = await db.saveUploadedMedia({
       id: uniqueId,
@@ -19276,7 +19275,7 @@ supportRoutes.get("/helpline", async (req, res) => {
 // server/routes/adminRoutes.ts
 var import_express9 = require("express");
 var import_bcryptjs3 = __toESM(require("bcryptjs"), 1);
-var import_crypto7 = __toESM(require("crypto"), 1);
+var import_crypto8 = __toESM(require("crypto"), 1);
 var import_path7 = __toESM(require("path"), 1);
 var import_fs7 = __toESM(require("fs"), 1);
 init_db();
@@ -19284,7 +19283,7 @@ init_notificationService();
 
 // server/services/analyticsService.ts
 init_pg();
-var import_crypto6 = __toESM(require("crypto"), 1);
+var import_crypto7 = __toESM(require("crypto"), 1);
 function resolveDateRange(filter) {
   const now = /* @__PURE__ */ new Date();
   const dhakaNow = new Date(now.getTime() + 6 * 60 * 60 * 1e3);
@@ -19359,7 +19358,7 @@ function calculateMetricChange(current, previous) {
 }
 async function trackAnalyticsEvent(event) {
   try {
-    const id = `EVT-${Date.now()}-${import_crypto6.default.randomBytes(3).toString("hex").toUpperCase()}`;
+    const id = `EVT-${Date.now()}-${import_crypto7.default.randomBytes(3).toString("hex").toUpperCase()}`;
     await query(
       `INSERT INTO analytics_events (id, user_id, event_type, entity_type, entity_id, metadata, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
@@ -19802,7 +19801,7 @@ adminRoutes.post("/upload-media", async (req, res) => {
       });
       return;
     }
-    const mediaId = import_crypto7.default.randomUUID() + (fileName ? "_" + fileName.replace(/[^a-zA-Z0-9.]/g, "") : isVideo ? ".mp4" : ".jpg");
+    const mediaId = import_crypto8.default.randomUUID() + (fileName ? "_" + fileName.replace(/[^a-zA-Z0-9.]/g, "") : isVideo ? ".mp4" : ".jpg");
     const cacheDir = import_path7.default.join(process.cwd(), "uploads", "media");
     if (!import_fs7.default.existsSync(cacheDir)) {
       import_fs7.default.mkdirSync(cacheDir, { recursive: true });
@@ -19882,13 +19881,8 @@ async function requireAdmin2(req, res, next) {
       message: "\u098F\u09A1\u09AE\u09BF\u09A8 \u0985\u09A8\u09C1\u09AE\u09CB\u09A6\u09A8 \u09AA\u09CD\u09B0\u09DF\u09CB\u099C\u09A8\u0964 \u0985\u09A8\u09C1\u0997\u09CD\u09B0\u09B9 \u0995\u09B0\u09C7 \u098F\u09A1\u09AE\u09BF\u09A8 \u09B9\u09BF\u09B8\u09C7\u09AC\u09C7 \u09B2\u0997\u0987\u09A8 \u0995\u09B0\u09C1\u09A8\u0964"
     });
   }
-  const validMasterKeys = [
-    process.env.ADMIN_SECRET_KEY,
-    "admin_secure_key_9876543210_abcdef",
-    "RAHMANJMCC",
-    "admin123456"
-  ].filter(Boolean).map((k) => k.trim());
-  if (validMasterKeys.includes(token)) {
+  const configuredAdminKey = process.env.ADMIN_SECRET_KEY?.trim();
+  if (configuredAdminKey && configuredAdminKey.length > 0 && token === configuredAdminKey) {
     req.admin = {
       id: "MASTER",
       name: "Master Admin",
@@ -21114,14 +21108,8 @@ adminRoutes.post("/verify", adminAuthRateLimiter, async (req, res) => {
   console.log(`ADMIN_AUTH_TRACE_EMAIL_PRESENT requestId=${requestId} present=${emailPresent}`);
   console.log(`ADMIN_AUTH_TRACE_PHONE_PRESENT requestId=${requestId} present=${phonePresent}`);
   console.log(`ADMIN_AUTH_TRACE_PASSWORD_PRESENT requestId=${requestId} present=${passwordPresent}`);
-  const configuredAdminSecret = process.env.ADMIN_SECRET_KEY;
-  const validMasterKeys = [
-    configuredAdminSecret,
-    "admin_secure_key_9876543210_abcdef",
-    "RAHMANJMCC",
-    "admin123456"
-  ].filter(Boolean).map((k) => k.trim());
-  const isMasterKeyMatch = !!(adminKeyPresent && validMasterKeys.includes(adminKey.trim()));
+  const configuredAdminSecret = process.env.ADMIN_SECRET_KEY?.trim();
+  const isMasterKeyMatch = !!(configuredAdminSecret && configuredAdminSecret.length > 0 && adminKeyPresent && adminKey.trim() === configuredAdminSecret);
   console.log(`ADMIN_AUTH_TRACE_MASTER_KEY_MATCH requestId=${requestId} match=${isMasterKeyMatch}`);
   if (isMasterKeyMatch) {
     try {
@@ -22767,7 +22755,7 @@ adminRoutes.post("/moderation/events/:id/action", requireAdmin2, async (req, res
         await query(`DELETE FROM circle_messages WHERE id = $1`, [event.message_id]);
       }
     } else if (action === "WARN_USER") {
-      const restrictionId = import_crypto7.default.randomUUID();
+      const restrictionId = import_crypto8.default.randomUUID();
       const warnReason = notes || "\u0995\u09C7\u09AD \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u099A\u09CD\u09AF\u09BE\u099F\u09C7 \u0986\u09AA\u09A8\u09BE\u09B0 \u09AC\u09BE\u09B0\u09CD\u09A4\u09BE\u09B0 \u09AC\u09BF\u09B0\u09C1\u09A6\u09CD\u09A7\u09C7 \u0995\u09AE\u09BF\u0989\u09A8\u09BF\u099F\u09BF \u09A8\u09C0\u09A4\u09BF \u09B2\u0999\u09CD\u0998\u09A8\u09C7\u09B0 \u099C\u09A8\u09CD\u09AF \u098F\u09A1\u09AE\u09BF\u09A8 \u09B8\u09A4\u09B0\u09CD\u0995\u09A4\u09BE \u099C\u09BE\u09B0\u09BF \u0995\u09B0\u09C7\u099B\u09C7\u09A8\u0964";
       await query(`
         INSERT INTO user_restrictions (id, user_id, circle_id, restriction_type, reason, issued_by, is_active)
@@ -22796,7 +22784,7 @@ adminRoutes.post("/moderation/events/:id/action", requireAdmin2, async (req, res
         console.error("[Admin Moderation] Failed to dispatch warning notification to user:", notifErr);
       }
     } else if (action === "MUTE_USER_24H") {
-      const restrictionId = import_crypto7.default.randomUUID();
+      const restrictionId = import_crypto8.default.randomUUID();
       const muteReason = notes || "\u0995\u09C7\u09AD \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u099A\u09CD\u09AF\u09BE\u099F\u09C7 \u09A8\u09BF\u09DF\u09AE \u09B2\u0999\u09CD\u0998\u09A8\u09C7\u09B0 \u0995\u09BE\u09B0\u09A3\u09C7 \u098F\u09A1\u09AE\u09BF\u09A8 \u0986\u09AA\u09A8\u09BE\u09B0 \u099C\u09A8\u09CD\u09AF \u09E8\u09EA \u0998\u09A3\u09CD\u099F\u09BE\u09B0 \u09AC\u09BE\u09B0\u09CD\u09A4\u09BE \u09AA\u09CD\u09B0\u09C7\u09B0\u09A3\u09C7 \u09B8\u09BE\u09AE\u09DF\u09BF\u0995 \u09AC\u09BF\u09B0\u09A4\u09BF \u09A8\u09BF\u09B0\u09CD\u09A7\u09BE\u09B0\u09A3 \u0995\u09B0\u09C7\u099B\u09C7\u09A8\u0964";
       await query(`
         INSERT INTO user_restrictions (id, user_id, circle_id, restriction_type, reason, issued_by, expires_at, is_active)
@@ -23372,7 +23360,7 @@ init_db();
 init_pg();
 
 // server/moderation/ModerationPipeline.ts
-var import_crypto8 = __toESM(require("crypto"), 1);
+var import_crypto9 = __toESM(require("crypto"), 1);
 init_pg();
 init_normalization();
 
@@ -24397,7 +24385,7 @@ var ModerationPipeline = class {
           `, [context.userId]);
           const blockCount = parseInt(recentBlocks.rows[0]?.block_count || "0", 10);
           if (blockCount >= 3) {
-            const restrictionId = import_crypto8.default.randomUUID();
+            const restrictionId = import_crypto9.default.randomUUID();
             await query(`
               INSERT INTO user_restrictions (id, user_id, circle_id, restriction_type, reason, issued_by, expires_at, is_active)
               VALUES ($1, $2, $3, 'MUTED_24H', '\u09B8\u09CD\u09AC\u09DF\u0982\u0995\u09CD\u09B0\u09BF\u09DF \u09B8\u09BE\u09AE\u09DF\u09BF\u0995 \u09AC\u09BF\u09B0\u09A4\u09BF: \u098F\u0995\u09BE\u09A7\u09BF\u0995\u09AC\u09BE\u09B0 \u0995\u09AE\u09BF\u0989\u09A8\u09BF\u099F\u09BF \u09A8\u09BF\u09DF\u09AE \u09B2\u0999\u09CD\u0998\u09A8\u09C7\u09B0 \u0995\u09BE\u09B0\u09A3\u09C7 \u09E8\u09EA \u0998\u09A3\u09CD\u099F\u09BE \u09AE\u09C7\u09B8\u09C7\u099C \u09AA\u09BE\u09A0\u09BE\u09A8\u09CB \u09B8\u09CD\u09A5\u0997\u09BF\u09A4\u0964', 'SYSTEM_AUTO', CURRENT_TIMESTAMP + INTERVAL '24 hours', TRUE)
@@ -24420,7 +24408,7 @@ var ModerationPipeline = class {
    * Log an audit event in moderation_events
    */
   async recordModerationEvent(data) {
-    const eventId = import_crypto8.default.randomUUID();
+    const eventId = import_crypto9.default.randomUUID();
     await query(`
       INSERT INTO moderation_events (
         id, message_id, circle_id, user_id, decision, risk_score, categories, reason, message_snippet, classifier_id,
@@ -24465,7 +24453,7 @@ var ModerationPipeline = class {
 var moderationPipeline = new ModerationPipeline();
 
 // server/routes/circleRoutes.ts
-var import_crypto9 = __toESM(require("crypto"), 1);
+var import_crypto10 = __toESM(require("crypto"), 1);
 var circleRoutes = import_express14.default.Router();
 circleRoutes.get("/my-restrictions", requireAuth, async (req, res) => {
   try {
@@ -24507,8 +24495,8 @@ circleRoutes.post("/", requireAuth, async (req, res) => {
     }
     const categoryVal = req.body.category || "Islamic";
     const streakVal = req.body.jamaatStreak !== void 0 ? Number(req.body.jamaatStreak) : 7;
-    const circleId = import_crypto9.default.randomUUID();
-    const memberId = import_crypto9.default.randomUUID();
+    const circleId = import_crypto10.default.randomUUID();
+    const memberId = import_crypto10.default.randomUUID();
     await query("BEGIN");
     await query(`
             INSERT INTO circles (id, name, description, admin_id, category, jamaat_streak)
@@ -24734,14 +24722,14 @@ circleRoutes.post("/invitations/:id/respond", requireAuth, async (req, res) => {
                 SET status = 'ACCEPTED', updated_at = NOW() 
                 WHERE id = $1
             `, [inviteId]);
-      const memberId = import_crypto9.default.randomUUID();
+      const memberId = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_members (id, circle_id, user_id, role, status, joined_at)
                 VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', NOW())
                 ON CONFLICT (circle_id, user_id) 
                 DO UPDATE SET status = 'ACTIVE', role = 'MEMBER', joined_at = NOW()
             `, [memberId, invite.circle_id, userId]);
-      const msgId = import_crypto9.default.randomUUID();
+      const msgId = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
                 VALUES ($1, $2, $3, $4, 'NUDGE', $5)
@@ -24752,7 +24740,7 @@ circleRoutes.post("/invitations/:id/respond", requireAuth, async (req, res) => {
         invite.current_user_name || "\u09B8\u09BE\u09A5\u09C0",
         `\u09AE\u09BE\u09B6\u09BE\u0986\u09B2\u09CD\u09B2\u09BE\u09B9! ${invite.current_user_name} \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2\u09C7 \u09AF\u09C1\u0995\u09CD\u09A4 \u09B9\u09DF\u09C7\u099B\u09C7\u09A8\u0964 \u09B8\u09AC\u09BE\u0987\u0995\u09C7 \u0986\u09A8\u09CD\u09A4\u09B0\u09BF\u0995 \u09B8\u09CD\u09AC\u09BE\u0997\u09A4\u09AE! \u{1F338}\u2728`
       ]);
-      const notifId = import_crypto9.default.randomUUID();
+      const notifId = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
                 VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
@@ -24775,6 +24763,16 @@ circleRoutes.post("/invitations/:id/respond", requireAuth, async (req, res) => {
                 SET status = 'REJECTED', updated_at = NOW() 
                 WHERE id = $1
             `, [inviteId]);
+      await query(`
+                UPDATE notifications 
+                SET read = TRUE, 
+                    message = '\u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3\u099F\u09BF \u09AA\u09CD\u09B0\u09A4\u09CD\u09AF\u09BE\u0996\u09CD\u09AF\u09BE\u09A8 \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964',
+                    message_bn = '\u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3\u099F\u09BF \u09AA\u09CD\u09B0\u09A4\u09CD\u09AF\u09BE\u0996\u09CD\u09AF\u09BE\u09A8 \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7\u0964'
+                WHERE user_id = $1 
+                  AND type = 'CIRCLE_INVITE' 
+                  AND (metadata::text LIKE $2)
+            `, [userId, `%"invitationId":"${inviteId}"%`]).catch(() => {
+      });
       return res.json({
         success: true,
         message: "\u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3 \u09AC\u09BE\u09A4\u09BF\u09B2 \u0995\u09B0\u09BE \u09B9\u09DF\u09C7\u099B\u09C7"
@@ -24785,6 +24783,28 @@ circleRoutes.post("/invitations/:id/respond", requireAuth, async (req, res) => {
     });
     console.error("Error responding to circle invitation:", error);
     res.status(500).json({ success: false, message: "\u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3\u09C7\u09B0 \u0989\u09A4\u09CD\u09A4\u09B0 \u09B8\u0982\u09B0\u0995\u09CD\u09B7\u09A3 \u0995\u09B0\u09BE \u09AF\u09BE\u09AF\u09BC\u09A8\u09BF" });
+  }
+});
+circleRoutes.delete("/invitations/:id", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const inviteId = req.params.id;
+    await query(`
+            UPDATE circle_direct_invitations 
+            SET status = 'CANCELLED', updated_at = NOW() 
+            WHERE id = $1 AND (invitee_id = $2 OR inviter_id = $2)
+        `, [inviteId, userId]);
+    await query(`
+            DELETE FROM notifications 
+            WHERE user_id = $1 
+              AND type = 'CIRCLE_INVITE' 
+              AND (metadata::text LIKE $2)
+        `, [userId, `%"invitationId":"${inviteId}"%`]).catch(() => {
+    });
+    res.json({ success: true, message: "\u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2 \u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3\u099F\u09BF \u09AE\u09C1\u099B\u09C7 \u09AB\u09C7\u09B2\u09BE \u09B9\u09DF\u09C7\u099B\u09C7" });
+  } catch (error) {
+    console.error("Error deleting circle invitation:", error);
+    res.status(500).json({ success: false, message: "\u0986\u09AE\u09A8\u09CD\u09A4\u09CD\u09B0\u09A3 \u09AE\u09C1\u099B\u09C7 \u09AB\u09C7\u09B2\u09BE \u09AF\u09BE\u09DF\u09A8\u09BF" });
   }
 });
 circleRoutes.post("/join", requireAuth, async (req, res) => {
@@ -24817,7 +24837,7 @@ circleRoutes.post("/join", requireAuth, async (req, res) => {
                 `, [invite.circle_id, userId]);
       }
     } else {
-      const memberId = import_crypto9.default.randomUUID();
+      const memberId = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_members (id, circle_id, user_id, role, status)
                 VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE')
@@ -24825,7 +24845,7 @@ circleRoutes.post("/join", requireAuth, async (req, res) => {
     }
     const userRes = await query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
     const userName = userRes.rows[0]?.full_name || "\u09A8\u09A4\u09C1\u09A8 \u09B8\u09BE\u09A5\u09C0";
-    const msgId = import_crypto9.default.randomUUID();
+    const msgId = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
             VALUES ($1, $2, $3, $4, 'NUDGE', $5)
@@ -24898,8 +24918,8 @@ circleRoutes.post("/:id/invites", requireAuth, async (req, res) => {
     if (membershipCheck.rows.length === 0) {
       return res.status(403).json({ success: false, message: "\u0985\u09A8\u09C1\u09AE\u09A4\u09BF \u09A8\u09C7\u0987" });
     }
-    const inviteId = import_crypto9.default.randomUUID();
-    const inviteCode = import_crypto9.default.randomUUID().substring(0, 8).toUpperCase();
+    const inviteId = import_crypto10.default.randomUUID();
+    const inviteCode = import_crypto10.default.randomUUID().substring(0, 8).toUpperCase();
     await query(`
             INSERT INTO circle_invites (id, circle_id, invite_code, created_by)
             VALUES ($1, $2, $3, $4)
@@ -24958,12 +24978,12 @@ circleRoutes.post("/:id/invite-user", requireAuth, async (req, res) => {
             DELETE FROM circle_direct_invitations 
             WHERE circle_id = $1 AND invitee_id = $2 AND status = 'PENDING'
         `, [circleId, targetUser.id]);
-    const inviteId = import_crypto9.default.randomUUID();
+    const inviteId = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO circle_direct_invitations (id, circle_id, inviter_id, invitee_id, invitee_phone, status, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, 'PENDING', NOW(), NOW())
         `, [inviteId, circleId, inviterId, targetUser.id, targetUser.phone]);
-    const notifId = import_crypto9.default.randomUUID();
+    const notifId = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
             VALUES ($1, $2, 'CIRCLE_INVITE', $3, $3, $4, $4, FALSE, $5, NOW())
@@ -25159,7 +25179,7 @@ circleRoutes.post("/:id/messages", requireAuth, circleTextMessageRateLimiter, as
     }
     const senderName = membershipCheck.rows[0].full_name || "\u09B8\u09BE\u09A5\u09C0";
     const circleName = membershipCheck.rows[0].circle_name || "Cave Circle";
-    const msgId = import_crypto9.default.randomUUID();
+    const msgId = import_crypto10.default.randomUUID();
     let textToSave = content || "";
     let moderationStatus = "APPROVED";
     let moderationReason = null;
@@ -25221,7 +25241,7 @@ circleRoutes.post("/:id/messages", requireAuth, circleTextMessageRateLimiter, as
         notifMessage = `${senderName}: ${textToSave && textToSave.length > 80 ? textToSave.substring(0, 80) + "..." : textToSave}`;
       }
       for (const c of companions.rows) {
-        const notifId = import_crypto9.default.randomUUID();
+        const notifId = import_crypto10.default.randomUUID();
         await query(`
                     INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
                     VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
@@ -25286,7 +25306,7 @@ circleRoutes.post("/:id/messages/:messageId/report", requireAuth, async (req, re
         message: "\u0986\u09AA\u09A8\u09BF \u0987\u09A4\u09BF\u09AA\u09C2\u09B0\u09CD\u09AC\u09C7 \u098F\u0987 \u09AC\u09BE\u09B0\u09CD\u09A4\u09BE\u099F\u09BF\u09A4\u09C7 \u09B0\u09BF\u09AA\u09CB\u09B0\u09CD\u099F \u0995\u09B0\u09C7\u099B\u09C7\u09A8\u0964 \u0986\u09AE\u09BE\u09A6\u09C7\u09B0 \u099F\u09BF\u09AE \u09AC\u09BF\u09B7\u09DF\u099F\u09BF \u09AA\u09B0\u09CD\u09AF\u09BE\u09B2\u09CB\u099A\u09A8\u09BE \u0995\u09B0\u099B\u09C7\u0964"
       });
     }
-    const reportId = import_crypto9.default.randomUUID();
+    const reportId = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO moderation_reports (
                 id, circle_id, message_id, reported_user_id, reporter_user_id, category, description, status
@@ -25319,7 +25339,7 @@ circleRoutes.get("/:id/quran-goals", requireAuth, async (req, res) => {
             LIMIT 1
         `, [circleId]);
     if (goalsRes.rows.length === 0) {
-      const goalId = import_crypto9.default.randomUUID();
+      const goalId = import_crypto10.default.randomUUID();
       const newGoal = await query(`
                 INSERT INTO circle_quran_goals (id, circle_id, title, total_juz, completed_juz)
                 VALUES ($1, $2, $3, 30, '[]'::jsonb)
@@ -25359,7 +25379,7 @@ circleRoutes.post("/:id/quran-goals/toggle-juz", requireAuth, async (req, res) =
         `, [circleId]);
     let goal = goalsRes.rows[0];
     if (!goal) {
-      const goalId = import_crypto9.default.randomUUID();
+      const goalId = import_crypto10.default.randomUUID();
       const newGoal = await query(`
                 INSERT INTO circle_quran_goals (id, circle_id, title, total_juz, completed_juz)
                 VALUES ($1, $2, $3, 30, '[]'::jsonb)
@@ -25399,7 +25419,7 @@ circleRoutes.post("/:id/quran-goals/toggle-juz", requireAuth, async (req, res) =
         completedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
       actionDone = "completed";
-      const msgId = import_crypto9.default.randomUUID();
+      const msgId = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
                 VALUES ($1, $2, $3, $4, 'QURAN_MILESTONE', $5)
@@ -25412,7 +25432,7 @@ circleRoutes.post("/:id/quran-goals/toggle-juz", requireAuth, async (req, res) =
                     WHERE circle_id = $1 AND user_id != $2 AND status = 'ACTIVE'
                 `, [circleId, userId]);
         for (const m of membersRes.rows) {
-          const notifId = import_crypto9.default.randomUUID();
+          const notifId = import_crypto10.default.randomUUID();
           await query(`
                         INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
                         VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
@@ -25568,7 +25588,7 @@ circleRoutes.post("/:id/challenge-battle", requireAuth, async (req, res) => {
         message: currentStatus === "ACTIVE" ? "\u098F\u0987 \u09A6\u09C1\u0987 \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2\u09C7\u09B0 \u09AE\u09A7\u09CD\u09AF\u09C7 \u0987\u09A4\u09CB\u09AE\u09A7\u09CD\u09AF\u09C7 \u098F\u0995\u099F\u09BF \u09AA\u09CD\u09B0\u09A4\u09BF\u09AF\u09CB\u0997\u09BF\u09A4\u09BE \u099A\u09B2\u099B\u09C7!" : "\u098F\u0987 \u09A6\u09C1\u0987 \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2\u09C7\u09B0 \u09AE\u09A7\u09CD\u09AF\u09C7 \u0987\u09A4\u09CB\u09AE\u09A7\u09CD\u09AF\u09C7 \u098F\u0995\u099F\u09BF \u099A\u09CD\u09AF\u09BE\u09B2\u09C7\u099E\u09CD\u099C \u09AA\u09BE\u09A0\u09BE\u09A8\u09CB \u09B9\u09DF\u09C7\u099B\u09C7 \u098F\u09AC\u0982 \u0989\u09A4\u09CD\u09A4\u09B0 \u0985\u09AA\u09C7\u0995\u09CD\u09B7\u09AE\u09BE\u09A3!"
       });
     }
-    const battleId = import_crypto9.default.randomUUID();
+    const battleId = import_crypto10.default.randomUUID();
     const duration = Number(durationDays) || 3;
     const battleTitle = title || `\u09A8\u09BE\u09AE\u09BE\u09AF, \u0995\u09C1\u09B0\u0986\u09A8 \u0993 \u09AF\u09BF\u0995\u09BF\u09B0 \u09AA\u09DF\u09C7\u09A8\u09CD\u099F \u09AA\u09CD\u09B0\u09A4\u09BF\u09AF\u09CB\u0997\u09BF\u09A4\u09BE (${duration} \u09A6\u09BF\u09A8)`;
     const note = rulesNote || "\u0993\u09DF\u09BE\u0995\u09CD\u09A4\u09AE\u09A4 \u09A8\u09BE\u09AE\u09BE\u09AF, \u0995\u09C1\u09B0\u0986\u09A8 \u09A4\u09BF\u09B2\u09BE\u0993\u09DF\u09BE\u09A4 \u0993 \u09AF\u09BF\u0995\u09BF\u09B0\u09C7 \u0985\u09B0\u09CD\u099C\u09BF\u09A4 \u09AA\u09DF\u09C7\u09A8\u09CD\u099F\u09C7\u09B0 \u09AD\u09BF\u09A4\u09CD\u09A4\u09BF\u09A4\u09C7 \u09AC\u09BF\u099C\u09DF\u09C0 \u09A8\u09BF\u09B0\u09CD\u09A7\u09BE\u09B0\u09A3 \u09B9\u09AC\u09C7\u0964";
@@ -25579,12 +25599,12 @@ circleRoutes.post("/:id/challenge-battle", requireAuth, async (req, res) => {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING', $8)
         `, [battleId, challengerCircleId, opponentCircleId, userId, battleTitle, battleType, duration, note]);
-    const msgId1 = import_crypto9.default.randomUUID();
+    const msgId1 = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
             VALUES ($1, $2, $3, $4, 'TEXT', $5)
         `, [msgId1, challengerCircleId, userId, challengerUserName, `\u2694\uFE0F \u0986\u09AE\u09B0\u09BE "${opponentCircle.name}" \u09B8\u09BE\u09B0\u09CD\u0995\u09C7\u09B2\u0995\u09C7 ${duration} \u09A6\u09BF\u09A8\u09C7\u09B0 \u09AA\u09DF\u09C7\u09A8\u09CD\u099F \u09AA\u09CD\u09B0\u09A4\u09BF\u09AF\u09CB\u0997\u09BF\u09A4\u09BE\u09B0 \u099A\u09CD\u09AF\u09BE\u09B2\u09C7\u099E\u09CD\u099C \u09AA\u09BE\u09A0\u09BF\u09DF\u09C7\u099B\u09BF!`]);
-    const msgId2 = import_crypto9.default.randomUUID();
+    const msgId2 = import_crypto10.default.randomUUID();
     await query(`
             INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
             VALUES ($1, $2, $3, $4, 'TEXT', $5)
@@ -25594,7 +25614,7 @@ circleRoutes.post("/:id/challenge-battle", requireAuth, async (req, res) => {
                 SELECT user_id FROM circle_members WHERE circle_id = $1 AND status = 'ACTIVE'
             `, [opponentCircleId]);
       for (const m of opponentMembers.rows) {
-        const notifId = import_crypto9.default.randomUUID();
+        const notifId = import_crypto10.default.randomUUID();
         await query(`
                     INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
                     VALUES ($1, $2, 'CIRCLE_BATTLE_CHALLENGE', $3, $3, $4, $4, FALSE, $5, NOW())
@@ -25768,12 +25788,12 @@ circleRoutes.post("/battles/:battleId/respond", requireAuth, async (req, res) =>
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $3
             `, [startTime.toISOString(), endTime.toISOString(), battleId]);
-      const msg1 = import_crypto9.default.randomUUID();
+      const msg1 = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
                 VALUES ($1, $2, $3, $4, 'TEXT', $5)
             `, [msg1, battle.challenger_circle_id, userId, battle.responder_name, `\u{1F389} \u09AE\u09BE\u09B6\u09BE\u0986\u09B2\u09CD\u09B2\u09BE\u09B9! "${battle.challenged_name}" \u0986\u09AE\u09BE\u09A6\u09C7\u09B0 \u099A\u09CD\u09AF\u09BE\u09B2\u09C7\u099E\u09CD\u099C \u0997\u09CD\u09B0\u09B9\u09A3 \u0995\u09B0\u09C7\u099B\u09C7! \u0986\u0997\u09BE\u09AE\u09C0 ${duration} \u09A6\u09BF\u09A8\u09C7\u09B0 \u09AA\u09DF\u09C7\u09A8\u09CD\u099F \u09AA\u09CD\u09B0\u09A4\u09BF\u09AF\u09CB\u0997\u09BF\u09A4\u09BE \u09B6\u09C1\u09B0\u09C1 \u09B9\u09DF\u09C7\u099B\u09C7!`]);
-      const msg2 = import_crypto9.default.randomUUID();
+      const msg2 = import_crypto10.default.randomUUID();
       await query(`
                 INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
                 VALUES ($1, $2, $3, $4, 'TEXT', $5)
@@ -25870,7 +25890,7 @@ circleRoutes.post("/:id/calls", requireAuth, async (req, res) => {
     }
     const callerName = memberRes.rows[0].full_name || "\u09B8\u09BE\u09A5\u09C0";
     const callerPhoto = memberRes.rows[0].photo_url || null;
-    const callId = import_crypto9.default.randomUUID();
+    const callId = import_crypto10.default.randomUUID();
     await query(`
             UPDATE circle_active_calls 
             SET status = 'ENDED', ended_at = CURRENT_TIMESTAMP 
@@ -25992,7 +26012,7 @@ var circleRoutes_default = circleRoutes;
 
 // server/routes/riderRoutes.ts
 var import_express15 = __toESM(require("express"), 1);
-var import_crypto10 = __toESM(require("crypto"), 1);
+var import_crypto11 = __toESM(require("crypto"), 1);
 init_db();
 init_timezone();
 var riderRoutes = import_express15.default.Router();
@@ -26130,7 +26150,7 @@ riderRoutes.post("/password-reset/request", otpRequestRateLimiter, async (req, r
     }
     const cleanPhone = normalizePhoneNumber(rawInput.trim());
     const rider = await db.getRiderByPhone(cleanPhone);
-    const otpCode = import_crypto10.default.randomInt(1e5, 1e6).toString();
+    const otpCode = import_crypto11.default.randomInt(1e5, 1e6).toString();
     let isValidRider = false;
     const isDev = process.env.NODE_ENV !== "production";
     if (rider) {

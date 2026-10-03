@@ -119,15 +119,9 @@ async function requireAdmin(req: any, res: any, next: any) {
     });
   }
 
-  // 0. Direct master key string match
-  const validMasterKeys = [
-    process.env.ADMIN_SECRET_KEY,
-    'admin_secure_key_9876543210_abcdef',
-    'RAHMANJMCC',
-    'admin123456'
-  ].filter(Boolean).map(k => k!.trim());
-
-  if (validMasterKeys.includes(token)) {
+  // 0. Direct master key match from environment variable only
+  const configuredAdminKey = process.env.ADMIN_SECRET_KEY?.trim();
+  if (configuredAdminKey && configuredAdminKey.length > 0 && token === configuredAdminKey) {
     req.admin = {
       id: 'MASTER',
       name: 'Master Admin',
@@ -1719,15 +1713,8 @@ adminRoutes.post('/verify', adminAuthRateLimiter, async (req, res) => {
   console.log(`ADMIN_AUTH_TRACE_PASSWORD_PRESENT requestId=${requestId} present=${passwordPresent}`);
 
   // Check Master Secret Key Login (Super Admin / Master Override)
-  const configuredAdminSecret = process.env.ADMIN_SECRET_KEY;
-  const validMasterKeys = [
-    configuredAdminSecret,
-    'admin_secure_key_9876543210_abcdef',
-    'RAHMANJMCC',
-    'admin123456'
-  ].filter(Boolean).map(k => k!.trim());
-
-  const isMasterKeyMatch = !!(adminKeyPresent && validMasterKeys.includes(adminKey.trim()));
+  const configuredAdminSecret = process.env.ADMIN_SECRET_KEY?.trim();
+  const isMasterKeyMatch = !!(configuredAdminSecret && configuredAdminSecret.length > 0 && adminKeyPresent && adminKey.trim() === configuredAdminSecret);
   console.log(`ADMIN_AUTH_TRACE_MASTER_KEY_MATCH requestId=${requestId} match=${isMasterKeyMatch}`);
 
   if (isMasterKeyMatch) {

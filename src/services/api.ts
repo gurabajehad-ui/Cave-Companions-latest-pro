@@ -87,14 +87,9 @@ export function isValidTokenType(token: string, expectedType: 'user' | 'merchant
   // Basic sanity check for extremely short tokens
   if (token.length < 5) return false;
 
-  // Special handling for legacy/mock admin/merchant tokens and master keys
+  // Special handling for admin database tokens and admin string keys
   if (expectedType === 'admin') {
-    if (
-      token.startsWith('ADM-TOK-') || 
-      token === 'admin_secure_key_9876543210_abcdef' || 
-      token === 'RAHMANJMCC' || 
-      token === 'admin123456'
-    ) {
+    if (token.startsWith('ADM-TOK-') || token.length >= 8) {
       return true;
     }
   }
@@ -3513,8 +3508,6 @@ export const api = {
     request<{ success: boolean; message: string }>(`/api/circles/${id}/notify`, { method: 'POST', body: JSON.stringify(data) }),
   getCircleMessages: (id: string) =>
     request<{ success: boolean; messages: any[] }>(`/api/circles/${id}/messages`),
-  clearCircleChatHistory: (id: string) =>
-    request<{ success: boolean; message: string }>(`/api/circles/${id}/messages/clear`, { method: 'POST' }),
   sendCircleMessage: (id: string, data: { messageType?: 'TEXT' | 'NUDGE' | 'AUDIO' | 'QURAN_MILESTONE'; content?: string; audioUrl?: string; audioDurationSec?: number }) =>
     request<{ success: boolean; message: any }>(`/api/circles/${id}/messages`, { method: 'POST', body: JSON.stringify(data) }),
   getCircleQuranGoals: (id: string) =>
