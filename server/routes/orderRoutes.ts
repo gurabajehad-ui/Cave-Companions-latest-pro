@@ -221,7 +221,7 @@ orderRoutes.delete('/:orderId', async (req: AuthRequest, res: Response) => {
     const { orderId } = req.params;
 
     const order = await db.getOrderById(orderId);
-    if (!order) {
+    if (!order || order.userId !== userId) {
       res.status(404).json({ success: false, message: 'অর্ডারটি খুঁজে পাওয়া যায়নি।' });
       return;
     }

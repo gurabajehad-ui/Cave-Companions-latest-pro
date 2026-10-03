@@ -4,7 +4,7 @@ import { X, Shield, FileText, Info, CheckCircle2 } from 'lucide-react';
 
 interface LegalModalProps {
   isOpen: boolean;
-  type: 'privacy' | 'terms' | 'about' | null;
+  type: 'privacy' | 'terms' | 'about' | 'disclaimer' | null;
   onClose: () => void;
 }
 
@@ -26,10 +26,12 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose })
               {type === 'privacy' && <Shield className="w-5 h-5 text-emerald-400" />}
               {type === 'terms' && <FileText className="w-5 h-5 text-indigo-400" />}
               {type === 'about' && <Info className="w-5 h-5 text-amber-400" />}
+              {type === 'disclaimer' && <Info className="w-5 h-5 text-rose-400" />}
               <h3 className="font-bold text-base text-white">
                 {type === 'privacy' && 'গোপনীয়তা নীতি (Privacy Policy)'}
                 {type === 'terms' && 'ব্যবহারের শর্তাবলী (Terms of Service)'}
                 {type === 'about' && 'ক্যাভ কমপ্যানিয়ন্স সম্পর্কে (About Us)'}
+                {type === 'disclaimer' && 'অস্বীকৃতি ও সতর্কতা (Disclaimer)'}
               </h3>
             </div>
             <button
@@ -116,6 +118,16 @@ export const LegalModal: React.FC<LegalModalProps> = ({ isOpen, type, onClose })
                 <div className="pt-2 text-[11px] text-slate-500 text-center">
                   ভার্সন: ৩.০.০ (Production Ready) • বাংলাদেশ টাইমজোন (Asia/Dhaka)
                 </div>
+              </>
+            )}
+            {type === 'disclaimer' && (
+              <>
+                <p className="font-semibold text-slate-200">
+                  অস্বীকৃতি ও সতর্কতা (Disclaimer):
+                </p>
+                <p>
+                  ক্যাভ কমপ্যানিয়ন্স অ্যাপে প্রদর্শিত সালাতের সময়সূচি এবং কিবলার দিক গণনাকৃত এবং আনুমানিক। ব্যবহারকারীদের নিজ দায়িত্বে সঠিক ওয়াক্ত ও দিক নিশ্চিত করার অনুরোধ করা হচ্ছে। জিপিএস লোকেশন ও ভেরিফিকেশন ফিচার শুধুমাত্র সালাতে উপস্থিতি উৎসাহিত করার উদ্দেশ্যে ব্যবহৃত হয়।
+                </p>
               </>
             )}
           </div>

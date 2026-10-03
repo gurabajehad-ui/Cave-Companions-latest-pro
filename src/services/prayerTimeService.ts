@@ -243,25 +243,30 @@ export async function calculatePrayerTimes(
   const params = CalculationMethod.Karachi();
   params.madhab = Madhab.Hanafi;
 
-  let pt: AdhanPrayerTimes | null = null;
+  let pt: any = null;
   try {
     pt = new AdhanPrayerTimes(coordinates, dhakaDate, params);
   } catch (err) {
     console.warn('Adhan JS library calculation failed, using solar calculation fallback:', err);
   }
 
-  let timesMap: { fajr: Date; dhuhr: Date; asr: Date; maghrib: Date; isha: Date };
+  let timesMap: { fajr: Date; dhuhr: Date; jumuah: Date; asr: Date; maghrib: Date; isha: Date };
 
   if (pt && pt.fajr && pt.dhuhr && pt.asr && pt.maghrib && pt.isha) {
     timesMap = {
       fajr: pt.fajr,
       dhuhr: pt.dhuhr,
+      jumuah: pt.dhuhr,
       asr: pt.asr,
       maghrib: pt.maghrib,
       isha: pt.isha
     };
   } else {
-    timesMap = calculateSolarPrayerTimes(coords.latitude, coords.longitude, date);
+    const solar = calculateSolarPrayerTimes(coords.latitude, coords.longitude, date);
+    timesMap = {
+      ...solar,
+      jumuah: solar.dhuhr
+    };
   }
 
   const namesBn: Record<PrayerType, string> = {
@@ -282,7 +287,7 @@ export async function calculatePrayerTimes(
     isha: 'Isha'
   };
 
-  const prayers: PrayerType[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  const prayers: PrayerType[] = ['fajr', 'dhuhr', 'jumuah', 'asr', 'maghrib', 'isha'];
   const result = {} as LocationPrayerTimes;
 
   prayers.forEach(p => {

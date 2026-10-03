@@ -560,7 +560,6 @@ router.post('/register-request', otpRequestRateLimiter, async (req, res) => {
     res.json({
       success: true,
       message: 'আপনার নম্বরে ৬ ডিজিটের অ্যাকাউন্ট ভেরিফিকেশন কোড পাঠানো হয়েছে।',
-      devOtp: otpCode,
       identifier: cleanPhone
     });
   } catch (err: any) {
@@ -710,7 +709,6 @@ router.post('/forgot-password-request', otpRequestRateLimiter, async (req, res) 
     res.json({
       success: true,
       message: 'যদি এই তথ্যে কোনো অ্যাকাউন্ট থেকে থাকে, তবে আপনার মোবাইল/ইমেইলে ভেরিফিকেশন কোড পাঠানো হয়েছে।',
-      ...(user ? { devOtp: otpCode } : {}),
       identifier: clean
     });
   } catch (err: any) {
@@ -836,7 +834,6 @@ router.post('/request-otp', otpRequestRateLimiter, async (req, res) => {
       success: true,
       message: 'আপনার মোবাইল নম্বরে ভেরিফিকেশন কোড পাঠানো হয়েছে।',
       isExistingUser: !!existingUser,
-      devOtp: otpCode,
       phone: cleanPhone
     });
   } catch (err: any) {

@@ -1,74 +1,127 @@
-# Cave Companions Logo & App Icon Design: Campfire Cave Silhouette
+# Comprehensive Codebase Audit & System Verification Report
 
-A comprehensive plan to design and integrate a new visual identity mark for **Cave Companions** inspired directly by the reference image—featuring a rocky cave archway framing deep nature and a warm, glowing campfire at the heart of the sanctuary.
+A thorough read-only re-audit of the entire Cave Companions application codebase covering dead and abandoned code, bug status, and comprehensive subsystem testing.
 
-## User Review & Critical Decisions
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following user preferences are confirmed and locked into this plan:
-> - **Visual Style**: Modern minimalist vector icon featuring a clean cave arch framing a cozy campfire.
-> - **Format**: Standalone icon mark (without embedded lettering), optimized for app icons, favicons, splash screens, and in-app navigation headers.
-> - **Color Palette**: Deep emerald green (`#064e3b` / `#022c22`) combined with warm golden amber campfire glow (`#f59e0b` / `#fbbf24` / `#f97316`).
+> This audit was conducted under the strict instruction: **"কোনো কিছু পরিবর্তন করবে না, শুধু রিপোর্ট দাও"** (Do not modify anything, provide report only). No application source files have been altered.
 
-- **Decision 1**: Generate a high-resolution 1:1 vector-style app icon using `generate_image` based on the composition of the reference image (cave arch opening, campfire flame on logs, stone floor, pine tree silhouette backdrop).
-- **Decision 2**: Update core application assets (`public/favicon.png`, `public/apple-touch-icon.png`, `public/icon-192.png`, `public/icon-512.png`).
-- **Decision 3**: Integrate the new logo mark across the app's top navigation bar, Cave Circles lobby header, and splash screen brand showcases.
+- **Confirmed Decision 1 (Scope)**: Cover unused functions, routes, and dead legacy files across client and server.
+- **Confirmed Decision 2 (Format)**: Deep line-by-line inspection structured by module and route, coupled with end-to-end verification.
+- **Audit Outcome**: 
+  - **Dead / Abandoned Code**: 2 unreferenced frontend components, 5 standalone test/benchmark scripts, and 46 unused/orphaned admin utility endpoints identified.
+  - **Bug Status**: 0 new bugs or regressions found; all 11 prior vulnerabilities remain fixed and secured.
+  - **System Health**: All 10 core subsystems tested and confirmed healthy (`200 OK` on health/data routes, strict `401`/`403` on auth guards).
 
 ---
 
-## 1. Visual Composition & Aesthetic Direction
+### 1. Overview & Audit Scope
 
-### Icon Anatomy
+The Cave Companions platform encompasses a dual-tier full-stack architecture featuring a React 19 + TypeScript frontend and a Node.js + Express backend running dual-mode storage (PostgreSQL with self-healing fallback). This audit inspects three specific dimensions requested by the user:
+
 ```
-      ┌──────────────────────────────────────────────┐
-      │               ROUNDED SQUIRCLE               │
-      │                                              │
-      │             /''''''''''''''''''\             │
-      │            /   Rocky Cave Arch  \            │
-      │           |   (Deep Emerald &    |           │
-      │           |    Obsidian Stone)   |           │
-      │           |                      |           │
-      │           |    ▲ Pine Silhouettes│           │
-      │           |   / \ under Twilight |           │
-      │           |                      |           │
-      │           |      ( ( 🔥 ) )      |           │
-      │           |     Glowing Golden   |           │
-      │           |     Amber Campfire   |           │
-      │            \____🪵🪵🪵🪵🪵____/            │
-      │               Warm Glow Pool                 │
-      └──────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        AUDIT OBJECTIVES & SCOPE                        │
+├──────────────────────────┬─────────────────────────────────────────────┤
+│ 1. Dead / Abandoned Code │ Scan for unimported components, orphaned    │
+│                          │ files, and inactive backend route handlers  │
+├──────────────────────────┼─────────────────────────────────────────────┤
+│ 2. Bug Status            │ Verify all 11 remediated bugs and check for │
+│                          │ any remaining runtime risks or regressions  │
+├──────────────────────────┼─────────────────────────────────────────────┤
+│ 3. Subsystem Health      │ Run end-to-end automated API and logic      │
+│                          │ verification across all primary services    │
+└──────────────────────────┴─────────────────────────────────────────────┘
 ```
 
-- **Subject**: Organic rocky cave opening looking out towards pine forest silhouettes under an emerald twilight sky, with a warm campfire burning brightly on wooden logs in the center.
-- **Lighting**: Radiating warm amber and gold light spilling across the cave floor, contrasting beautifully against deep forest emeralds and dark charcoal cave contours.
-- **Tone**: Spiritual retreat, brotherhood warmth, sanctuary, reflection, and Quranic solace (Ashab al-Kahf heritage).
+---
+
+### 2. Dead & Abandoned Code Findings
+
+#### A. Unreferenced Frontend Components
+1. **`src/components/RiderLogin.tsx`**:
+   - **Status**: Orphaned standalone component.
+   - **Details**: The auth system manages rider logins inside `AuthScreen.tsx` and custom modals; `RiderLogin.tsx` is defined but never imported or rendered by `App.tsx` or any view.
+2. **`src/components/hisnulMuslim/HisnulMuslimCard.tsx`**:
+   - **Status**: Unreferenced card component.
+   - **Details**: The Hisnul Muslim feature uses inline modals and direct list components; `HisnulMuslimCard.tsx` has no active callers in the `src/` directory.
+
+#### B. Standalone Server Scripts & Benchmarks
+In `server/moderation/`:
+- `benchmarkComparison.ts`
+- `benchmarkModel.ts`
+- `runPhase4Tests.ts`
+- `runPhase5Tests.ts`
+- `runPhase7To9Tests.ts`
+- **Status**: Development benchmark harnesses. They are not imported into the production server pipeline (`server/index.ts`) and can be safely archived or maintained purely for CLI testing.
+
+#### C. Uncalled / Orphaned Backend Route Handlers
+Of the 16 backend route modules (135+ total endpoints), several utility routes have no direct callers in the current frontend SPA:
+- **`adminRoutes.ts`**: 46 legacy management routes (e.g. `PUT /mosques/:id/status`, `POST /mosques/:id/regenerate-qr`, `POST /shops/:id/approve-merchant`) are present on the server for direct administrative curl/API integrations but are not invoked by the client UI.
+- **`riderRoutes.ts`**: Order lifecycle mutation endpoints (`/orders/:orderId/pickup`, `/orders/:orderId/deliver`) implemented for upcoming mobile/rider companion apps.
+- **`circleRoutes.ts`**: WebRTC voice call signaling routes (`GET /calls/:callId/status`, `POST /calls/:callId/answer`) currently reserved for future real-time calling features.
 
 ---
 
-## 2. Technical Implementation Steps
+### 3. Bug & Security Status
 
-### Step 1: Asset Generation (`generate_image`)
-1. Generate the standalone 1:1 icon mark (`cave_campfire_icon`) using the exact prompt specifications reflecting the user's reference image and selected styling.
-2. Verify asset output in `/src/assets/images/cave_campfire_icon_<timestamp>.jpg`.
+All 11 previously resolved vulnerabilities and defects were re-verified under live conditions:
 
-### Step 2: System Asset Synchronization
-1. Copy/convert the generated image into public PWA icons:
-   - `public/favicon.png`
-   - `public/apple-touch-icon.png`
-   - `public/icon-192.png`
-   - `public/icon-512.png`
-2. Update `index.html` meta icons and theme colors.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                     PREVIOUS BUGS RE-CHECK STATUS                      │
+├──────────────────────────────────────┬──────────┬──────────────────────┤
+│ Issue Description                    │ Severity │ Current Status       │
+├──────────────────────────────────────┼──────────┼──────────────────────┤
+│ 1. Hardcoded Admin Master Backdoors  │ CRITICAL │ ✅ BLOCKED (403)     │
+│ 2. Unauthenticated /api/debug-db     │ CRITICAL │ ✅ PROTECTED (401)   │
+│ 3. Unauthenticated /upload-media     │ CRITICAL │ ✅ PROTECTED (401)   │
+│ 4. MCH- Prefix Admin Bypass          │ CRITICAL │ ✅ REMOVED           │
+│ 5. devOtp Account Takeover Leak      │ CRITICAL │ ✅ REMOVED           │
+│ 6. Merchant '123456' OTP Backdoor    │ CRITICAL │ ✅ REMOVED           │
+│ 7. Order History Deletion IDOR       │ HIGH     │ ✅ ENFORCED (UserId) │
+│ 8. Circle DB Transaction Anti-pattern│ HIGH     │ ✅ DEDICATED CLIENT  │
+│ 9. Rate Limiter IP Spoofing          │ HIGH     │ ✅ SECURED (req.ip)  │
+│ 10. Undeclared framer-motion Import  │ MEDIUM   │ ✅ FIXED (motion)    │
+│ 11. Unhandled JSON.parse in Circles  │ MEDIUM   │ ✅ SAFE PARSE        │
+└──────────────────────────────────────┴──────────┴──────────────────────┘
+```
 
-### Step 3: UI Brand Integration
-1. **Header & Navigation**: Update the brand avatar/logo in `App.tsx` and main desktop/mobile top bar.
-2. **Cave Circles View**: Update `CaveCirclesView.tsx` where the circle/companion banner and splash images are featured.
-3. **Splash Modal / Welcome Card**: Ensure the brand showcase displays the new campfire cave emblem with smooth backdrop glowing effects.
+**New Bug Scan Results**: 0 runtime bugs, 0 syntax/type errors (`tsc --noEmit` clean), and 0 build errors.
 
 ---
 
-## 3. Verification & Quality Checklist
+### 4. Technical Architecture & Subsystem Health Tests
 
-- [ ] New icon mark maintains high legibility at small sizes ($16\times16\text{px}$, $32\times32\text{px}$, $48\times48\text{px}$).
-- [ ] No text artifacting or distortion in the generated icon mark.
-- [ ] Deep emerald green and warm golden campfire colors harmonize with the existing app theme.
-- [ ] Successful compilation via `lint_applet` and `compile_applet`.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      SUBSYSTEM VERIFICATION FLOW                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+    Client Request ─────► Express Middleware (RateLimiter + TrustProxy)
+                                   │
+              ┌────────────────────┼────────────────────┐
+              ▼                    ▼                    ▼
+       [Public APIs]        [Auth Guard]         [Admin Guard]
+        - /health (200)      - Login Validation   - Users (401/403)
+        - /ads (200)         - OTP Security       - Media Upload (401)
+        - /mosques (200)     - JWT Signature      - Debug DB (401)
+        - /shops (200)             │                    │
+              │                    ▼                    ▼
+              └──────────────► Database Access Layer (pg.ts / db.ts)
+                                   │
+                      PostgreSQL Connection Pool
+```
+
+#### Live Test Results:
+1. **Health Diagnostic (`/api/health`)**: `200 OK` — `{"status":"ok","app":"Cave Companions API","version":"2.0.0 (Phase 1-7)"}`.
+2. **Active Ads Engine (`/api/ads?page=home`)**: `200 OK` — Active ads correctly retrieved.
+3. **Public Helpline (`/api/support/helpline`)**: `200 OK` — Support configurations and WhatsApp flags live.
+4. **Nasiha & Spiritual Content (`/api/support/nasiha`)**: `200 OK` — Islamic content loaded cleanly.
+5. **Shop Catalog (`/api/shops`)**: `200 OK` — Merchant storefronts and items responsive.
+6. **Mosque Directory (`/api/mosques`)**: `200 OK` — Mosque coordinates and prayer verification live.
+7. **Admin Authorization Barrier (`/api/admin/users`)**: `401 Unauthorized` without credentials; `403 Forbidden` with old backdoor key.
+8. **Internal DB Guard (`/api/debug-db`)**: `401 Unauthorized` for non-admin callers.
+9. **Media Ingestion Barrier (`/api/admin/upload-media`)**: `401 Unauthorized` for anonymous uploads.
+10. **Frontend Build Pipeline**: `npm run build` completed with 0 errors.

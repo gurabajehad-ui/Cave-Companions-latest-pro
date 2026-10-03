@@ -93,12 +93,7 @@ merchantRoutes.post('/verify-otp', authRateLimiter, async (req, res: Response) =
     const cleanPhone = normalizePhoneNumber(phone);
     const cleanOtp = String(otpCode).trim();
 
-    // Universal test OTP '123456' for testing & demo environments
-    let result = await db.verifyOtp(cleanPhone, cleanOtp, 'MERCHANT_REGISTRATION');
-
-    if (!result.valid && cleanOtp === '123456') {
-      result = { valid: true };
-    }
+    const result = await db.verifyOtp(cleanPhone, cleanOtp, 'MERCHANT_REGISTRATION');
 
     if (!result.valid) {
       let errorMsg = 'ভুল ওটিপি কোড।';

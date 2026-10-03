@@ -27,12 +27,7 @@ const safeKeyGenerator = (req: any, res: any) => {
   if (authHeader && typeof authHeader === 'string' && authHeader.length > 10) {
     return `auth_${authHeader.trim().slice(-32)}`;
   }
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (forwardedFor) {
-    const firstIp = typeof forwardedFor === 'string' ? forwardedFor.split(',')[0] : forwardedFor[0];
-    if (firstIp && typeof firstIp === 'string') return `ip_${firstIp.trim()}`;
-  }
-  // Call the standard ipKeyGenerator helper to comply with express-rate-limit validation checks
+  // Call the standard ipKeyGenerator helper which securely validates req.ip according to trust proxy configuration
   return ipKeyGenerator(req, res);
 };
 
@@ -126,3 +121,20 @@ export const circleTextMessageRateLimiter = rateLimit({
   keyGenerator: safeKeyGenerator
 });
 
+/**
+ * Rate limiter for Cave AI Server-Side Gemini Chat
+ * Max: 60 requests per minute
+ */
+export const aiChatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipTestBypass,
+  message: {
+    success: false,
+    error: 'AI_RATE_LIMITED',
+    message: 'আপনি খুব দ্রুত প্রশ্ন করছেন। অনুগ্রহ করে কয়েক সেকেন্ড অপেক্ষা করে আবার চেষ্টা করুন।'
+  },
+  keyGenerator: safeKeyGenerator
+});

@@ -26,7 +26,7 @@ export const adminRoutes = Router();
 // =====================================
 // Media & Video Upload
 // =====================================
-adminRoutes.post('/upload-media', async (req: any, res: any) => {
+adminRoutes.post('/upload-media', requireAdmin, async (req: any, res: any) => {
   try {
     const { fileData, fileName } = req.body;
     if (!fileData) {
@@ -119,9 +119,11 @@ async function requireAdmin(req: any, res: any, next: any) {
     });
   }
 
-  // 0. Direct master key match from environment variable only
-  const configuredAdminKey = process.env.ADMIN_SECRET_KEY?.trim();
-  if (configuredAdminKey && configuredAdminKey.length > 0 && token === configuredAdminKey) {
+  // 0. Direct master key string match
+  const adminSecret = process.env.ADMIN_SECRET_KEY?.trim();
+  const validMasterKeys = adminSecret ? [adminSecret] : [];
+
+  if (validMasterKeys.length > 0 && validMasterKeys.includes(token)) {
     req.admin = {
       id: 'MASTER',
       name: 'Master Admin',
@@ -200,18 +202,6 @@ async function requireAdmin(req: any, res: any, next: any) {
     return next();
   }
 
-  if (token.startsWith('MCH-')) {
-    const merchant = await db.getMerchantById(token);
-    if (merchant && (merchant.role === 'ADMIN' || merchant.role === 'SUPER_ADMIN')) {
-      req.admin = {
-        id: merchant.id,
-        name: merchant.name,
-        role: merchant.role || 'ADMIN',
-        permissions: MASTER_PERMISSIONS
-      };
-      return next();
-    }
-  }
 
   // 4. Also check if the token is a valid user token for a user with role === 'ADMIN' or 'SUPER_ADMIN'
   const userPayload = verifyUserToken(token);
@@ -1714,7 +1704,9 @@ adminRoutes.post('/verify', adminAuthRateLimiter, async (req, res) => {
 
   // Check Master Secret Key Login (Super Admin / Master Override)
   const configuredAdminSecret = process.env.ADMIN_SECRET_KEY?.trim();
-  const isMasterKeyMatch = !!(configuredAdminSecret && configuredAdminSecret.length > 0 && adminKeyPresent && adminKey.trim() === configuredAdminSecret);
+  const validMasterKeys = configuredAdminSecret ? [configuredAdminSecret] : [];
+
+  const isMasterKeyMatch = Boolean(adminKeyPresent && validMasterKeys.length > 0 && validMasterKeys.includes(adminKey.trim()));
   console.log(`ADMIN_AUTH_TRACE_MASTER_KEY_MATCH requestId=${requestId} match=${isMasterKeyMatch}`);
 
   if (isMasterKeyMatch) {

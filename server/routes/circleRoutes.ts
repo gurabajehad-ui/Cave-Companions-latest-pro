@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth } from '../auth.js';
 import { db, normalizePhoneNumber } from '../db.js';
-import { query, useSqliteFallback } from '../pg.js';
+import { query, pool, useSqliteFallback } from '../pg.js';
 import { circleTextMessageRateLimiter } from '../rateLimiter.js';
 import { moderationPipeline } from '../moderation/ModerationPipeline.js';
 import crypto from 'crypto';
@@ -51,6 +51,7 @@ circleRoutes.get('/', requireAuth, async (req, res) => {
 
 // 2. Create a circle
 circleRoutes.post('/', requireAuth, async (req, res) => {
+    const client = await pool.connect();
     try {
         const userId = (req as any).user.id;
         const { name, description } = req.body;
@@ -65,25 +66,27 @@ circleRoutes.post('/', requireAuth, async (req, res) => {
         const circleId = crypto.randomUUID();
         const memberId = crypto.randomUUID();
         
-        await query('BEGIN');
+        await client.query('BEGIN');
         
-        await query(`
+        await client.query(`
             INSERT INTO circles (id, name, description, admin_id, category, jamaat_streak)
             VALUES ($1, $2, $3, $4, $5, $6)
         `, [circleId, name, description, userId, categoryVal, streakVal]);
 
-        await query(`
+        await client.query(`
             INSERT INTO circle_members (id, circle_id, user_id, role, status)
             VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE')
         `, [memberId, circleId, userId]);
 
-        await query('COMMIT');
+        await client.query('COMMIT');
 
         res.json({ success: true, circleId, message: 'সার্কেল তৈরি করা হয়েছে' });
     } catch (error) {
-        await query('ROLLBACK');
+        await client.query('ROLLBACK').catch(() => {});
         console.error('Error creating circle:', error);
         res.status(500).json({ success: false, message: 'সার্কেল তৈরি করা যায়নি। আবার চেষ্টা করুন।' });
+    } finally {
+        client.release();
     }
 });
 
@@ -230,18 +233,6 @@ async function ensureBattlesTable() {
     }
 }
 
-// Helper: Ensure circle_members has chat_cleared_at column
-let chatClearedColChecked = false;
-async function ensureChatClearedColumn() {
-    if (chatClearedColChecked) return;
-    try {
-        await query(`ALTER TABLE circle_members ADD COLUMN chat_cleared_at TIMESTAMP WITH TIME ZONE;`);
-        chatClearedColChecked = true;
-    } catch (e) {
-        chatClearedColChecked = true;
-    }
-}
-
 // 4b. GET All Public Circles (For lobby filters and search)
 circleRoutes.get('/all-public', requireAuth, async (req, res) => {
     try {
@@ -337,57 +328,65 @@ circleRoutes.post('/invitations/:id/respond', requireAuth, async (req, res) => {
         const invite = inviteCheck.rows[0];
 
         if (action === 'ACCEPT') {
-            await query('BEGIN');
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
 
-            // 1. Update invite status
-            await query(`
-                UPDATE circle_direct_invitations 
-                SET status = 'ACCEPTED', updated_at = NOW() 
-                WHERE id = $1
-            `, [inviteId]);
+                // 1. Update invite status
+                await client.query(`
+                    UPDATE circle_direct_invitations 
+                    SET status = 'ACCEPTED', updated_at = NOW() 
+                    WHERE id = $1
+                `, [inviteId]);
 
-            // 2. Add or activate member in circle_members
-            const memberId = crypto.randomUUID();
-            await query(`
-                INSERT INTO circle_members (id, circle_id, user_id, role, status, joined_at)
-                VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', NOW())
-                ON CONFLICT (circle_id, user_id) 
-                DO UPDATE SET status = 'ACTIVE', role = 'MEMBER', joined_at = NOW()
-            `, [memberId, invite.circle_id, userId]);
+                // 2. Add or activate member in circle_members
+                const memberId = crypto.randomUUID();
+                await client.query(`
+                    INSERT INTO circle_members (id, circle_id, user_id, role, status, joined_at)
+                    VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', NOW())
+                    ON CONFLICT (circle_id, user_id) 
+                    DO UPDATE SET status = 'ACTIVE', role = 'MEMBER', joined_at = NOW()
+                `, [memberId, invite.circle_id, userId]);
 
-            // 3. Post a welcome message in circle chat
-            const msgId = crypto.randomUUID();
-            await query(`
-                INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
-                VALUES ($1, $2, $3, $4, 'NUDGE', $5)
-            `, [
-                msgId, 
-                invite.circle_id, 
-                userId, 
-                invite.current_user_name || 'সাথী', 
-                `মাশাআল্লাহ! ${invite.current_user_name} সার্কেলে যুক্ত হয়েছেন। সবাইকে আন্তরিক স্বাগতম! 🌸✨`
-            ]);
+                // 3. Post a welcome message in circle chat
+                const msgId = crypto.randomUUID();
+                await client.query(`
+                    INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
+                    VALUES ($1, $2, $3, $4, 'NUDGE', $5)
+                `, [
+                    msgId, 
+                    invite.circle_id, 
+                    userId, 
+                    invite.current_user_name || 'সাথী', 
+                    `মাশাআল্লাহ! ${invite.current_user_name} সার্কেলে যুক্ত হয়েছেন। সবাইকে আন্তরিক স্বাগতম! 🌸✨`
+                ]);
 
-            // 4. Notify inviter
-            const notifId = crypto.randomUUID();
-            await query(`
-                INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
-                VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
-            `, [
-                notifId,
-                invite.inviter_id,
-                `🎉 ${invite.circle_name} • আমন্ত্রণ গৃহীত`,
-                `মাশাআল্লাহ! ${invite.current_user_name} আপনার "${invite.circle_name}" সার্কেলে যোগদানের আমন্ত্রণ গ্রহণ করেছেন।`,
-                JSON.stringify({ circleId: invite.circle_id, url: '/cave_circle' })
-            ]);
+                // 4. Notify inviter
+                const notifId = crypto.randomUUID();
+                await client.query(`
+                    INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
+                    VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
+                `, [
+                    notifId,
+                    invite.inviter_id,
+                    `🎉 ${invite.circle_name} • আমন্ত্রণ গৃহীত`,
+                    `মাশাআল্লাহ! ${invite.current_user_name} আপনার "${invite.circle_name}" সার্কেলে যোগদানের আমন্ত্রণ গ্রহণ করেছেন।`,
+                    JSON.stringify({ circleId: invite.circle_id, url: '/cave_circle' })
+                ]);
 
-            await query('COMMIT');
+                await client.query('COMMIT');
 
-            return res.json({ 
-                success: true, 
-                circleId: invite.circle_id,
-                message: `আলহামদুলিল্লাহ! আপনি "${invite.circle_name}" সার্কেলে সফলভাবে যুক্ত হয়েছেন।` 
-            });
+                return res.json({ 
+                    success: true, 
+                    circleId: invite.circle_id,
+                    message: `আলহামদুলিল্লাহ! আপনি "${invite.circle_name}" সার্কেলে সফলভাবে যুক্ত হয়েছেন।` 
+                });
+            } catch (err) {
+                await client.query('ROLLBACK').catch(() => {});
+                throw err;
+            } finally {
+                client.release();
+            }
         } else {
             // REJECT
             await query(`
@@ -722,10 +721,18 @@ circleRoutes.post('/:id/leave', requireAuth, async (req, res) => {
             const otherMembers = await query(`SELECT user_id FROM circle_members WHERE circle_id = $1 AND user_id != $2 AND status = 'ACTIVE'`, [circleId, userId]);
             if (otherMembers.rows.length > 0) {
                 // Promote first other member to admin
-                await query('BEGIN');
-                await query(`UPDATE circle_members SET role = 'ADMIN' WHERE circle_id = $1 AND user_id = $2`, [circleId, otherMembers.rows[0].user_id]);
-                await query(`UPDATE circle_members SET status = 'INACTIVE' WHERE circle_id = $1 AND user_id = $2`, [circleId, userId]);
-                await query('COMMIT');
+                const client = await pool.connect();
+                try {
+                    await client.query('BEGIN');
+                    await client.query(`UPDATE circle_members SET role = 'ADMIN' WHERE circle_id = $1 AND user_id = $2`, [circleId, otherMembers.rows[0].user_id]);
+                    await client.query(`UPDATE circle_members SET status = 'INACTIVE' WHERE circle_id = $1 AND user_id = $2`, [circleId, userId]);
+                    await client.query('COMMIT');
+                } catch (err) {
+                    await client.query('ROLLBACK').catch(() => {});
+                    throw err;
+                } finally {
+                    client.release();
+                }
             } else {
                 // Last member, delete circle
                 await query(`DELETE FROM circles WHERE id = $1`, [circleId]);
@@ -816,32 +823,17 @@ circleRoutes.post('/:id/notify', requireAuth, async (req, res) => {
 // GET Circle Messages
 circleRoutes.get('/:id/messages', requireAuth, async (req, res) => {
     try {
-        await ensureChatClearedColumn();
         const userId = (req as any).user.id;
         const circleId = req.params.id;
 
-        // Verify membership & check if user has a cleared chat timestamp
-        let chatClearedAt: string | null = null;
-        try {
-            const membershipCheck = await query(`
-                SELECT role, chat_cleared_at FROM circle_members 
-                WHERE circle_id = $1 AND user_id = $2 AND status = 'ACTIVE'
-            `, [circleId, userId]);
+        // Verify membership
+        const membershipCheck = await query(`
+            SELECT role FROM circle_members 
+            WHERE circle_id = $1 AND user_id = $2 AND status = 'ACTIVE'
+        `, [circleId, userId]);
 
-            if (membershipCheck.rows.length === 0) {
-                return res.status(403).json({ success: false, message: 'অনুমতি নেই' });
-            }
-
-            chatClearedAt = membershipCheck.rows[0].chat_cleared_at || null;
-        } catch (colErr) {
-            const fallbackCheck = await query(`
-                SELECT role FROM circle_members 
-                WHERE circle_id = $1 AND user_id = $2 AND status = 'ACTIVE'
-            `, [circleId, userId]);
-
-            if (fallbackCheck.rows.length === 0) {
-                return res.status(403).json({ success: false, message: 'অনুমতি নেই' });
-            }
+        if (membershipCheck.rows.length === 0) {
+            return res.status(403).json({ success: false, message: 'অনুমতি নেই' });
         }
 
         // Mark unread messages in this circle as seen by the current user
@@ -890,73 +882,19 @@ circleRoutes.get('/:id/messages', requireAuth, async (req, res) => {
             console.warn('Failed to update read_by on circle messages:', markErr);
         }
 
-        let messagesRes;
-        if (chatClearedAt) {
-            messagesRes = await query(`
-                SELECT cm.*, u.full_name, u.gender, u.photo_url 
-                FROM circle_messages cm
-                JOIN users u ON cm.user_id = u.id
-                WHERE cm.circle_id = $1 AND cm.created_at > $2
-                ORDER BY cm.created_at ASC
-                LIMIT 150
-            `, [circleId, chatClearedAt]);
-        } else {
-            messagesRes = await query(`
-                SELECT cm.*, u.full_name, u.gender, u.photo_url 
-                FROM circle_messages cm
-                JOIN users u ON cm.user_id = u.id
-                WHERE cm.circle_id = $1
-                ORDER BY cm.created_at ASC
-                LIMIT 150
-            `, [circleId]);
-        }
+        const messagesRes = await query(`
+            SELECT cm.*, u.full_name, u.gender, u.photo_url 
+            FROM circle_messages cm
+            JOIN users u ON cm.user_id = u.id
+            WHERE cm.circle_id = $1
+            ORDER BY cm.created_at ASC
+            LIMIT 150
+        `, [circleId]);
 
         res.json({ success: true, messages: messagesRes.rows });
     } catch (error) {
         console.error('Error fetching circle messages:', error);
         res.status(500).json({ success: false, message: 'মেসেজ লোড করা যায়নি' });
-    }
-});
-
-// POST Clear Circle Chat History (Only for the current user)
-circleRoutes.post('/:id/messages/clear', requireAuth, async (req, res) => {
-    try {
-        await ensureChatClearedColumn();
-        const userId = (req as any).user.id;
-        const circleId = req.params.id;
-
-        // Verify membership
-        const membershipCheck = await query(`
-            SELECT id FROM circle_members 
-            WHERE circle_id = $1 AND user_id = $2 AND status = 'ACTIVE'
-        `, [circleId, userId]);
-
-        if (membershipCheck.rows.length === 0) {
-            return res.status(403).json({ success: false, message: 'অনুমতি নেই' });
-        }
-
-        try {
-            await query(`
-                UPDATE circle_members 
-                SET chat_cleared_at = CURRENT_TIMESTAMP 
-                WHERE circle_id = $1 AND user_id = $2
-            `, [circleId, userId]);
-        } catch (alterErr) {
-            await query(`ALTER TABLE circle_members ADD COLUMN chat_cleared_at TIMESTAMP WITH TIME ZONE;`).catch(() => {});
-            await query(`
-                UPDATE circle_members 
-                SET chat_cleared_at = CURRENT_TIMESTAMP 
-                WHERE circle_id = $1 AND user_id = $2
-            `, [circleId, userId]);
-        }
-
-        res.json({ 
-            success: true, 
-            message: 'আপনার জন্য চ্যাট হিস্টোরি সফলভাবে মুছে ফেলা হয়েছে' 
-        });
-    } catch (error) {
-        console.error('Error clearing circle chat history for user:', error);
-        res.status(500).json({ success: false, message: 'চ্যাট হিস্টোরি মুছতে ব্যর্থ হয়েছে' });
     }
 });
 

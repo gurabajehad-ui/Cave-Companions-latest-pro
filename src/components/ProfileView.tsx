@@ -44,6 +44,7 @@ interface ProfileViewProps {
   onOpenTasbih?: () => void;
   onOpenQibla?: () => void;
   onOpenMosques?: () => void;
+  onBack?: () => void;
 }
 
 // Custom Ornate Tasbih Rosary Icon

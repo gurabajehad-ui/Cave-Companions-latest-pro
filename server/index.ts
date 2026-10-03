@@ -26,6 +26,7 @@ process.on('unhandledRejection', (reason: any) => {
 });
 
 import authRoutes from './routes/authRoutes.js';
+import { requireAdmin } from './auth.js';
 import prayerRoutes from './routes/prayerRoutes.js';
 import mosqueRoutes from './routes/mosqueRoutes.js';
 import tokenRoutes from './routes/tokenRoutes.js';
@@ -233,8 +234,8 @@ async function startServer() {
     }
   });
 
-  // Debug DB connection and seeding state
-  app.get('/api/debug-db', async (req, res) => {
+  // Debug DB connection and seeding state (Admin-only)
+  app.get('/api/debug-db', requireAdmin, async (req, res) => {
     try {
       const pgModule = await import('./pg.js');
       const start = Date.now();
@@ -357,7 +358,7 @@ async function startServer() {
       }
     }));
 
-    app.use((req, res) => {
+    app.get('*', (req, res) => {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');

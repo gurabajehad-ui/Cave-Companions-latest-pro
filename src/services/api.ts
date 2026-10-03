@@ -87,9 +87,9 @@ export function isValidTokenType(token: string, expectedType: 'user' | 'merchant
   // Basic sanity check for extremely short tokens
   if (token.length < 5) return false;
 
-  // Special handling for admin database tokens and admin string keys
+  // Special handling for admin session tokens
   if (expectedType === 'admin') {
-    if (token.startsWith('ADM-TOK-') || token.length >= 8) {
+    if (token.startsWith('ADM-TOK-') || token.length >= 16) {
       return true;
     }
   }

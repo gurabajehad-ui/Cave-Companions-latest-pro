@@ -9824,9 +9824,9 @@ class Database {
     const res = await query(`
       UPDATE orders
       SET user_history_deleted = TRUE, updated_at = NOW()
-      WHERE (id = $1 OR order_number = $1)
+      WHERE (id = $1 OR order_number = $1) AND user_id = $2
       RETURNING id
-    `, [orderId]);
+    `, [orderId, userId]);
     return (res.rowCount ?? 0) > 0;
   }
 

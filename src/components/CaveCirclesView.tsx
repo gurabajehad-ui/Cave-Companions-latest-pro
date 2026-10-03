@@ -1632,25 +1632,33 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
     }
   };
 
+  const safeParseJuzList = (val: any): any[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   const completedJuzCount = useMemo(() => {
     if (!quranGoal || !quranGoal.completed_juz) return 0;
-    const list = typeof quranGoal.completed_juz === 'string' 
-      ? JSON.parse(quranGoal.completed_juz) 
-      : quranGoal.completed_juz;
-    return Array.isArray(list) ? list.length : 0;
+    const list = safeParseJuzList(quranGoal.completed_juz);
+    return list.length;
   }, [quranGoal]);
 
   const completedJuzMap = useMemo(() => {
     const map = new Map<number, any>();
     if (!quranGoal || !quranGoal.completed_juz) return map;
-    const list = typeof quranGoal.completed_juz === 'string' 
-      ? JSON.parse(quranGoal.completed_juz) 
-      : quranGoal.completed_juz;
-    if (Array.isArray(list)) {
-      list.forEach(item => {
-        if (item && item.juz) map.set(item.juz, item);
-      });
-    }
+    const list = safeParseJuzList(quranGoal.completed_juz);
+    list.forEach(item => {
+      if (item && item.juz) map.set(item.juz, item);
+    });
     return map;
   }, [quranGoal]);
 
@@ -3174,7 +3182,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
     const isAmir = members.find(m => m.user_id === user?.id)?.role === 'ADMIN';
 
     return (
-      <div className="space-y-4 w-full max-w-2xl mx-auto pb-16 animate-fadeIn px-0.5 sm:px-1">
+      <div className="space-y-4 max-w-4xl mx-auto pb-16 animate-fadeIn">
         {/* Top Header Card with Islamic Aesthetic */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#06241a] via-[#041912] to-[#020b08] border border-emerald-500/30 p-3 sm:p-4 shadow-2xl backdrop-blur-xl">
           {/* Ambient Gold & Emerald Glow Spots */}
@@ -3973,7 +3981,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
       : circleNotifications;
 
     return (
-      <div className="space-y-4 w-full max-w-2xl mx-auto pb-20 animate-fadeIn text-slate-100 min-h-screen px-0.5 sm:px-1">
+      <div className="space-y-4 w-full max-w-4xl mx-auto pb-20 animate-fadeIn text-slate-100 min-h-screen px-1 sm:px-2">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -4064,11 +4072,11 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-2.5 w-full">
+            <div className="grid grid-cols-1 gap-2.5">
               {pendingInvitations.map((inv) => (
                 <div 
                   key={inv.id}
-                  className="w-full p-4 rounded-2xl bg-slate-950/90 border border-amber-500/40 flex flex-col gap-3 shadow-lg relative"
+                  className="p-4 rounded-2xl bg-slate-950/90 border border-amber-500/40 flex flex-col gap-3 shadow-lg relative"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white font-black flex items-center justify-center text-lg shrink-0 shadow-md">
@@ -4237,7 +4245,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
   // VIEW: CIRCLES MAIN LOBBY LIST
   // ==========================================
   return (
-    <div className="space-y-4 sm:space-y-5 w-full max-w-2xl mx-auto pb-16 animate-fadeIn text-slate-100 min-h-screen px-0.5 sm:px-1">
+    <div className="space-y-4 w-full max-w-4xl mx-auto pb-16 animate-fadeIn text-slate-100 min-h-screen px-1 sm:px-2">
       {/* Top Profile / Cave Circles Nav Header */}
       <div className="flex items-center justify-between gap-3 pt-2">
         {/* Left: Back button + Logo + Title together */}
@@ -4393,7 +4401,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
                 <p className="text-xs text-slate-400">{isBn ? 'অন্য কোনো নাম লিখে সার্চ করুন' : 'Try searching with another name'}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3.5 w-full">
+              <div className="grid grid-cols-1 gap-3.5">
                 {globalSearchResults.map((c) => {
                   const theme = getCategoryTheme(c.category || 'Islamic');
                   const isMyCircle = circles.some(mc => mc.id === c.id) || c.is_joined || c.admin_id === user?.id;
@@ -4401,7 +4409,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
                   return (
                     <div
                       key={`global-${c.id}`}
-                      className="w-full p-4 rounded-2xl sm:rounded-3xl bg-slate-950/90 border border-amber-500/30 hover:border-amber-500/60 transition-all shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                      className="p-4 rounded-3xl bg-slate-950/90 border border-amber-500/30 hover:border-amber-500/60 transition-all shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         {/* Circle Avatar */}
@@ -4479,7 +4487,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3.5 w-full">
+          <div className="grid grid-cols-1 gap-3.5">
             {filteredCircles.map((c) => {
               const theme = getCategoryTheme(c.category || 'Islamic');
               const isCircleAdmin = c.admin_id === user?.id;
@@ -4488,7 +4496,7 @@ export const CaveCirclesView: React.FC<CaveCirclesViewProps> = ({ onBack, onShow
                 <div
                   key={c.id}
                   onClick={() => setActiveCircleId(c.id)}
-                  className="w-full p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl bg-slate-950/80 hover:bg-slate-900/80 border border-slate-850 hover:border-emerald-500/30 transition-all shadow-xl relative overflow-hidden flex items-center justify-between gap-3 group cursor-pointer"
+                  className="p-4 rounded-3xl bg-slate-950/80 hover:bg-slate-900/80 border border-slate-850 hover:border-emerald-500/30 transition-all shadow-xl relative overflow-hidden flex items-center justify-between gap-3 group cursor-pointer"
                 >
                   <div className="flex items-center gap-3.5 min-w-0 flex-1">
                     {/* Circle Mockup-Style Avatar */}

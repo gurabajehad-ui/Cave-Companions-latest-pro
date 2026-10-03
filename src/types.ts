@@ -88,6 +88,8 @@ export interface TodayPrayerStatus {
   summaryText: string;
 }
 
+export type TodayPrayerRecord = TodayPrayerStatus;
+
 export interface UserLifetimeStats {
   totalCount: number;
   uniqueDays: number;

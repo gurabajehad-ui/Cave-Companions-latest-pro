@@ -32,11 +32,11 @@ const AdminDashboardView = lazy(() => import('./components/AdminDashboardView').
 const MerchantPortalView = lazy(() => import('./components/MerchantPortalView').then(m => ({ default: m.MerchantPortalView })));
 const RiderPortalView = lazy(() => import('./components/RiderPortalView').then(m => ({ default: m.RiderPortalView })));
 const MyTokenView = lazy(() => import('./components/MyTokenView').then(m => ({ default: m.MyTokenView })));
-const PartnerShopsView = lazy(() => import('./components/PartnerShopsView').then(m => ({ default: m.PartnerShopsView })));
+const ShopsView = lazy(() => import('./components/ShopsView').then(m => ({ default: m.ShopsView })));
 const CaveMarketView = lazy(() => import('./components/CaveMarketView').then(m => ({ default: m.CaveMarketView })));
 const ProfileView = lazy(() => import('./components/ProfileView').then(m => ({ default: m.ProfileView })));
-const QuranView = lazy(() => import('./components/QuranView').then(m => ({ default: m.QuranView })));
-const HisnulMuslimView = lazy(() => import('./components/HisnulMuslimView').then(m => ({ default: m.HisnulMuslimView })));
+const QuranView = lazy(() => import('./components/quran/QuranMajidView').then(m => ({ default: m.QuranMajidView })));
+const HisnulMuslimView = lazy(() => import('./components/hisnulMuslim/HisnulMuslimView').then(m => ({ default: m.HisnulMuslimView })));
 const CaveCirclesView = lazy(() => import('./components/CaveCirclesView').then(m => ({ default: m.CaveCirclesView })));
 const NotificationsView = lazy(() => import('./components/NotificationsView').then(m => ({ default: m.NotificationsView })));
 const BlogView = lazy(() => import('./components/BlogView').then(m => ({ default: m.BlogView })));
@@ -305,8 +305,8 @@ export const App: React.FC = () => {
   const fetchNasiha = useCallback(async () => {
     try {
       const res = await api.getPublicNasihaList();
-      if (res && res.nasihaList) {
-        setNasihaList(res.nasihaList);
+      if (res && ((res as any).nasihaList || (res as any).list)) {
+        setNasihaList((res as any).nasihaList || (res as any).list);
       }
     } catch {}
   }, []);
@@ -719,7 +719,7 @@ export const App: React.FC = () => {
 
             <SehriIftarCard
               userDistrict={user?.district}
-              onShowToast={showToast}
+              onShowToast={(type, title, message) => showToast(type as any, title, message)}
             />
 
             <DailyNasihaCard
@@ -745,7 +745,7 @@ export const App: React.FC = () => {
         {/* ================= SHOPS TAB ================= */}
         {activeTab === 'shops' && (
           <Suspense fallback={<LoadingFallback />}>
-            <PartnerShopsView
+            <ShopsView
               user={user as any}
               onShowToast={showToast}
               onNavigateToTokens={() => setActiveTab('tokens')}
@@ -765,6 +765,7 @@ export const App: React.FC = () => {
         {activeTab === 'profile' && (
           <Suspense fallback={<LoadingFallback />}>
             <ProfileView
+              onLogout={logout}
               onBack={() => setActiveTab('home')}
               onShowToast={showToast}
               onOpenQibla={() => setIsQiblaOpen(true)}
@@ -777,14 +778,20 @@ export const App: React.FC = () => {
         {/* ================= QURAN VIEW ================= */}
         {activeTab === 'quran' && (
           <Suspense fallback={<LoadingFallback />}>
-            <QuranView />
+            <QuranView
+              onBack={() => setActiveTab('home')}
+              onShowToast={(msg, type) => showToast(type, '', msg)}
+            />
           </Suspense>
         )}
 
         {/* ================= HISNUL MUSLIM VIEW ================= */}
         {activeTab === 'hisnul_muslim' && (
           <Suspense fallback={<LoadingFallback />}>
-            <HisnulMuslimView />
+            <HisnulMuslimView
+              onBack={() => setActiveTab('home')}
+              onShowToast={(msg, type) => showToast(type, '', msg)}
+            />
           </Suspense>
         )}
 
@@ -877,7 +884,11 @@ export const App: React.FC = () => {
 
       {/* Persistent Bottom Navigation */}
       {['home', 'tokens', 'shops', 'market', 'profile'].includes(activeTab) && (
-        <BottomNav activeTab={activeTab as any} onChangeTab={(tab) => setActiveTab(tab)} />
+        <BottomNav
+          activeTab={activeTab as any}
+          setActiveTab={(tab) => setActiveTab(tab)}
+          onChangeTab={(tab) => setActiveTab(tab)}
+        />
       )}
 
       {/* Global Modals */}

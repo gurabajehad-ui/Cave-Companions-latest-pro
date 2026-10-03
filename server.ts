@@ -9,16 +9,17 @@ const distBundle = path.join(process.cwd(), 'dist', 'server.cjs');
 const rootBundle = path.join(process.cwd(), 'server.cjs');
 const buildBundle = path.join(process.cwd(), 'build', 'server.cjs');
 
-const isTsx = process.execArgv.some(arg => arg.includes('tsx')) || process.argv.some(arg => arg.includes('tsx'));
-const isProd = process.env.NODE_ENV === 'production' || process.argv.includes('--production') || !isTsx;
+// Explicit production flag only (e.g. node server.ts --production or SERVE_STATIC_BUILD=true)
+const isExplicitProd = process.argv.includes('--production') || process.env.SERVE_STATIC_BUILD === 'true';
 
-if (isProd && fs.existsSync(distBundle)) {
+if (isExplicitProd && fs.existsSync(distBundle)) {
   await import(`file://${distBundle}`);
-} else if (isProd && fs.existsSync(rootBundle)) {
+} else if (isExplicitProd && fs.existsSync(rootBundle)) {
   await import(`file://${rootBundle}`);
-} else if (isProd && fs.existsSync(buildBundle)) {
+} else if (isExplicitProd && fs.existsSync(buildBundle)) {
   await import(`file://${buildBundle}`);
 } else {
+  // Always run live dev server with Vite middleware
   try {
     await import('./server/index.ts');
   } catch (err: any) {
@@ -31,3 +32,4 @@ if (isProd && fs.existsSync(distBundle)) {
     }
   }
 }
+
