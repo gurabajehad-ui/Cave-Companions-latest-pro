@@ -126,20 +126,3 @@ export const circleTextMessageRateLimiter = rateLimit({
   keyGenerator: safeKeyGenerator
 });
 
-/**
- * Rate limiter for Cave AI Server-Side Gemini Chat
- * Max: 60 requests per minute
- */
-export const aiChatRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: skipTestBypass,
-  message: {
-    success: false,
-    error: 'AI_RATE_LIMITED',
-    message: 'আপনি খুব দ্রুত প্রশ্ন করছেন। অনুগ্রহ করে কয়েক সেকেন্ড অপেক্ষা করে আবার চেষ্টা করুন।'
-  },
-  keyGenerator: safeKeyGenerator
-});
