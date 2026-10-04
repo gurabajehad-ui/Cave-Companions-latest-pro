@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth } from '../auth.js';
 import { db, normalizePhoneNumber } from '../db.js';
-import { query, pool, useSqliteFallback } from '../pg.js';
+import { query, useSqliteFallback } from '../pg.js';
 import { circleTextMessageRateLimiter } from '../rateLimiter.js';
 import { moderationPipeline } from '../moderation/ModerationPipeline.js';
 import crypto from 'crypto';
@@ -51,7 +51,6 @@ circleRoutes.get('/', requireAuth, async (req, res) => {
 
 // 2. Create a circle
 circleRoutes.post('/', requireAuth, async (req, res) => {
-    const client = await pool.connect();
     try {
         const userId = (req as any).user.id;
         const { name, description } = req.body;
@@ -66,27 +65,25 @@ circleRoutes.post('/', requireAuth, async (req, res) => {
         const circleId = crypto.randomUUID();
         const memberId = crypto.randomUUID();
         
-        await client.query('BEGIN');
+        await query('BEGIN');
         
-        await client.query(`
+        await query(`
             INSERT INTO circles (id, name, description, admin_id, category, jamaat_streak)
             VALUES ($1, $2, $3, $4, $5, $6)
         `, [circleId, name, description, userId, categoryVal, streakVal]);
 
-        await client.query(`
+        await query(`
             INSERT INTO circle_members (id, circle_id, user_id, role, status)
             VALUES ($1, $2, $3, 'ADMIN', 'ACTIVE')
         `, [memberId, circleId, userId]);
 
-        await client.query('COMMIT');
+        await query('COMMIT');
 
         res.json({ success: true, circleId, message: 'সার্কেল তৈরি করা হয়েছে' });
     } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
+        await query('ROLLBACK');
         console.error('Error creating circle:', error);
         res.status(500).json({ success: false, message: 'সার্কেল তৈরি করা যায়নি। আবার চেষ্টা করুন।' });
-    } finally {
-        client.release();
     }
 });
 
@@ -328,65 +325,57 @@ circleRoutes.post('/invitations/:id/respond', requireAuth, async (req, res) => {
         const invite = inviteCheck.rows[0];
 
         if (action === 'ACCEPT') {
-            const client = await pool.connect();
-            try {
-                await client.query('BEGIN');
+            await query('BEGIN');
 
-                // 1. Update invite status
-                await client.query(`
-                    UPDATE circle_direct_invitations 
-                    SET status = 'ACCEPTED', updated_at = NOW() 
-                    WHERE id = $1
-                `, [inviteId]);
+            // 1. Update invite status
+            await query(`
+                UPDATE circle_direct_invitations 
+                SET status = 'ACCEPTED', updated_at = NOW() 
+                WHERE id = $1
+            `, [inviteId]);
 
-                // 2. Add or activate member in circle_members
-                const memberId = crypto.randomUUID();
-                await client.query(`
-                    INSERT INTO circle_members (id, circle_id, user_id, role, status, joined_at)
-                    VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', NOW())
-                    ON CONFLICT (circle_id, user_id) 
-                    DO UPDATE SET status = 'ACTIVE', role = 'MEMBER', joined_at = NOW()
-                `, [memberId, invite.circle_id, userId]);
+            // 2. Add or activate member in circle_members
+            const memberId = crypto.randomUUID();
+            await query(`
+                INSERT INTO circle_members (id, circle_id, user_id, role, status, joined_at)
+                VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', NOW())
+                ON CONFLICT (circle_id, user_id) 
+                DO UPDATE SET status = 'ACTIVE', role = 'MEMBER', joined_at = NOW()
+            `, [memberId, invite.circle_id, userId]);
 
-                // 3. Post a welcome message in circle chat
-                const msgId = crypto.randomUUID();
-                await client.query(`
-                    INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
-                    VALUES ($1, $2, $3, $4, 'NUDGE', $5)
-                `, [
-                    msgId, 
-                    invite.circle_id, 
-                    userId, 
-                    invite.current_user_name || 'সাথী', 
-                    `মাশাআল্লাহ! ${invite.current_user_name} সার্কেলে যুক্ত হয়েছেন। সবাইকে আন্তরিক স্বাগতম! 🌸✨`
-                ]);
+            // 3. Post a welcome message in circle chat
+            const msgId = crypto.randomUUID();
+            await query(`
+                INSERT INTO circle_messages (id, circle_id, user_id, sender_name, message_type, content)
+                VALUES ($1, $2, $3, $4, 'NUDGE', $5)
+            `, [
+                msgId, 
+                invite.circle_id, 
+                userId, 
+                invite.current_user_name || 'সাথী', 
+                `মাশাআল্লাহ! ${invite.current_user_name} সার্কেলে যুক্ত হয়েছেন। সবাইকে আন্তরিক স্বাগতম! 🌸✨`
+            ]);
 
-                // 4. Notify inviter
-                const notifId = crypto.randomUUID();
-                await client.query(`
-                    INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
-                    VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
-                `, [
-                    notifId,
-                    invite.inviter_id,
-                    `🎉 ${invite.circle_name} • আমন্ত্রণ গৃহীত`,
-                    `মাশাআল্লাহ! ${invite.current_user_name} আপনার "${invite.circle_name}" সার্কেলে যোগদানের আমন্ত্রণ গ্রহণ করেছেন।`,
-                    JSON.stringify({ circleId: invite.circle_id, url: '/cave_circle' })
-                ]);
+            // 4. Notify inviter
+            const notifId = crypto.randomUUID();
+            await query(`
+                INSERT INTO notifications (id, user_id, type, title, title_bn, message, message_bn, read, metadata, created_at)
+                VALUES ($1, $2, 'CIRCLE_MESSAGE', $3, $3, $4, $4, FALSE, $5, NOW())
+            `, [
+                notifId,
+                invite.inviter_id,
+                `🎉 ${invite.circle_name} • আমন্ত্রণ গৃহীত`,
+                `মাশাআল্লাহ! ${invite.current_user_name} আপনার "${invite.circle_name}" সার্কেলে যোগদানের আমন্ত্রণ গ্রহণ করেছেন।`,
+                JSON.stringify({ circleId: invite.circle_id, url: '/cave_circle' })
+            ]);
 
-                await client.query('COMMIT');
+            await query('COMMIT');
 
-                return res.json({ 
-                    success: true, 
-                    circleId: invite.circle_id,
-                    message: `আলহামদুলিল্লাহ! আপনি "${invite.circle_name}" সার্কেলে সফলভাবে যুক্ত হয়েছেন।` 
-                });
-            } catch (err) {
-                await client.query('ROLLBACK').catch(() => {});
-                throw err;
-            } finally {
-                client.release();
-            }
+            return res.json({ 
+                success: true, 
+                circleId: invite.circle_id,
+                message: `আলহামদুলিল্লাহ! আপনি "${invite.circle_name}" সার্কেলে সফলভাবে যুক্ত হয়েছেন।` 
+            });
         } else {
             // REJECT
             await query(`
@@ -505,6 +494,44 @@ circleRoutes.post('/join', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Error joining circle:', error);
         res.status(500).json({ success: false, message: 'সার্কেলে যুক্ত হওয়া যায়নি' });
+    }
+});
+
+// Check for Active Incoming Call (Polled globally across the app)
+circleRoutes.get('/active-call', requireAuth, async (req, res) => {
+    try {
+        const userId = (req as any).user.id;
+
+        // Check for direct calls or group calls in user's circles within last 30 minutes
+        const callRes = await query(`
+            SELECT cac.*, c.name as circle_name, u.full_name as caller_name, u.photo_url as caller_photo_url
+            FROM circle_active_calls cac
+            JOIN circles c ON cac.circle_id = c.id
+            JOIN users u ON cac.caller_user_id = u.id
+            WHERE cac.status IN ('RINGING', 'CONNECTED')
+              AND cac.caller_user_id != $1
+              AND cac.created_at > (CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+              AND (
+                  cac.target_user_id = $1
+                  OR (
+                      cac.target_user_id IS NULL 
+                      AND cac.circle_id IN (
+                          SELECT circle_id FROM circle_members WHERE user_id = $1 AND status = 'ACTIVE'
+                      )
+                  )
+              )
+            ORDER BY cac.created_at DESC
+            LIMIT 1
+        `, [userId]);
+
+        if (callRes.rows.length === 0) {
+            return res.json({ success: true, activeCall: null });
+        }
+
+        res.json({ success: true, activeCall: callRes.rows[0] });
+    } catch (error) {
+        console.error('Error checking active call:', error);
+        res.status(500).json({ success: false, message: 'কল তথ্য লোড করা যায়নি' });
     }
 });
 
@@ -721,18 +748,10 @@ circleRoutes.post('/:id/leave', requireAuth, async (req, res) => {
             const otherMembers = await query(`SELECT user_id FROM circle_members WHERE circle_id = $1 AND user_id != $2 AND status = 'ACTIVE'`, [circleId, userId]);
             if (otherMembers.rows.length > 0) {
                 // Promote first other member to admin
-                const client = await pool.connect();
-                try {
-                    await client.query('BEGIN');
-                    await client.query(`UPDATE circle_members SET role = 'ADMIN' WHERE circle_id = $1 AND user_id = $2`, [circleId, otherMembers.rows[0].user_id]);
-                    await client.query(`UPDATE circle_members SET status = 'INACTIVE' WHERE circle_id = $1 AND user_id = $2`, [circleId, userId]);
-                    await client.query('COMMIT');
-                } catch (err) {
-                    await client.query('ROLLBACK').catch(() => {});
-                    throw err;
-                } finally {
-                    client.release();
-                }
+                await query('BEGIN');
+                await query(`UPDATE circle_members SET role = 'ADMIN' WHERE circle_id = $1 AND user_id = $2`, [circleId, otherMembers.rows[0].user_id]);
+                await query(`UPDATE circle_members SET status = 'INACTIVE' WHERE circle_id = $1 AND user_id = $2`, [circleId, userId]);
+                await query('COMMIT');
             } else {
                 // Last member, delete circle
                 await query(`DELETE FROM circles WHERE id = $1`, [circleId]);
@@ -1806,44 +1825,6 @@ circleRoutes.post('/:id/calls', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Error initiating call:', error);
         res.status(500).json({ success: false, message: 'কল শুরু করা সম্ভব হয়নি' });
-    }
-});
-
-// 2. Check for Active Incoming Call (Polled globally across the app)
-circleRoutes.get('/active-call', requireAuth, async (req, res) => {
-    try {
-        const userId = (req as any).user.id;
-
-        // Check for direct calls or group calls in user's circles within last 30 minutes
-        const callRes = await query(`
-            SELECT cac.*, c.name as circle_name, u.full_name as caller_name, u.photo_url as caller_photo_url
-            FROM circle_active_calls cac
-            JOIN circles c ON cac.circle_id = c.id
-            JOIN users u ON cac.caller_user_id = u.id
-            WHERE cac.status IN ('RINGING', 'CONNECTED')
-              AND cac.caller_user_id != $1
-              AND cac.created_at > (CURRENT_TIMESTAMP - INTERVAL '30 minutes')
-              AND (
-                  cac.target_user_id = $1
-                  OR (
-                      cac.target_user_id IS NULL 
-                      AND cac.circle_id IN (
-                          SELECT circle_id FROM circle_members WHERE user_id = $1 AND status = 'ACTIVE'
-                      )
-                  )
-              )
-            ORDER BY cac.created_at DESC
-            LIMIT 1
-        `, [userId]);
-
-        if (callRes.rows.length === 0) {
-            return res.json({ success: true, activeCall: null });
-        }
-
-        res.json({ success: true, activeCall: callRes.rows[0] });
-    } catch (error) {
-        console.error('Error checking active call:', error);
-        res.status(500).json({ success: false, message: 'কল তথ্য লোড করা যায়নি' });
     }
 });
 

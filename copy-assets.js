@@ -15,14 +15,28 @@ async function buildAndCopy() {
   if (fs.existsSync(serverEntry)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-      // Only externalize native binary modules that cannot be bundled by esbuild
-      const externals = ['sqlite3', 'esbuild', 'pg-native', 'canvas', 'fsevents'];
+      const externals = [
+        ...Object.keys(pkg.dependencies || {}),
+        'sqlite3',
+        'esbuild',
+        'pg-native',
+        'canvas',
+        'fsevents',
+        'onnxruntime-node',
+        'sharp',
+        '@xenova/transformers',
+        '*.node'
+      ];
       
       await esbuild.build({
         entryPoints: [serverEntry],
         bundle: true,
         platform: 'node',
         format: 'cjs',
+        packages: 'external',
+        loader: {
+          '.node': 'empty'
+        },
         external: externals,
         sourcemap: true,
         outfile: path.join(distDir, 'server.cjs'),
